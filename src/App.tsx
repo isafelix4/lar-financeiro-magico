@@ -7,6 +7,7 @@ import MainLayout from "./components/layout/MainLayout";
 import VisaoGeral from "./pages/VisaoGeral";
 import Dividas from "./pages/Dividas";
 import Planejamento from "./pages/Planejamento";
+import Configuracoes from "./pages/Configuracoes";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -22,6 +23,7 @@ const App = () => (
             <Route path="/" element={<VisaoGeral />} />
             <Route path="/dividas" element={<Dividas />} />
             <Route path="/planejamento" element={<Planejamento />} />
+            <Route path="/configuracoes" element={<Configuracoes />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </MainLayout>
