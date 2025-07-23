@@ -8,51 +8,89 @@ All colors MUST be HSL.
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    /* Base colors */
+    --background: 210 100% 98%;
+    --foreground: 210 15% 15%;
 
+    /* Card colors */
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 210 15% 15%;
 
+    /* Financial dashboard primary colors */
+    --primary: 210 95% 45%;
+    --primary-light: 210 95% 55%;
+    --primary-foreground: 0 0% 100%;
+
+    /* Financial success/positive */
+    --success: 120 60% 40%;
+    --success-light: 120 60% 50%;
+    --success-foreground: 0 0% 100%;
+
+    /* Financial warning/caution */
+    --warning: 45 95% 55%;
+    --warning-light: 45 95% 65%;
+    --warning-foreground: 30 15% 15%;
+
+    /* Financial danger/negative */
+    --danger: 0 75% 55%;
+    --danger-light: 0 75% 65%;
+    --danger-foreground: 0 0% 100%;
+
+    /* Secondary colors */
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 210 15% 15%;
+
+    /* Muted colors */
+    --muted: 210 30% 95%;
+    --muted-foreground: 210 10% 45%;
+
+    /* Accent colors */
+    --accent: 210 50% 90%;
+    --accent-foreground: 210 15% 15%;
+
+    /* Interactive elements */
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover-foreground: 210 15% 15%;
 
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
+    /* Form elements */
+    --border: 210 30% 88%;
+    --input: 210 30% 88%;
+    --ring: 210 95% 45%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    /* Destructive */
+    --destructive: 0 75% 55%;
+    --destructive-foreground: 0 0% 100%;
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    /* Financial gradients */
+    --gradient-success: linear-gradient(135deg, hsl(var(--success)), hsl(var(--success-light)));
+    --gradient-warning: linear-gradient(135deg, hsl(var(--warning)), hsl(var(--warning-light)));
+    --gradient-danger: linear-gradient(135deg, hsl(var(--danger)), hsl(var(--danger-light)));
+    --gradient-primary: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary-light)));
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    /* Chart colors */
+    --chart-1: 210 95% 45%;
+    --chart-2: 120 60% 40%;
+    --chart-3: 45 95% 55%;
+    --chart-4: 0 75% 55%;
+    --chart-5: 270 80% 55%;
+    --chart-6: 30 85% 50%;
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+    /* Shadows */
+    --shadow-financial: 0 4px 12px hsl(var(--primary) / 0.15);
+    --shadow-success: 0 4px 12px hsl(var(--success) / 0.15);
+    --shadow-danger: 0 4px 12px hsl(var(--danger) / 0.15);
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    --radius: 0.75rem;
 
-    --radius: 0.5rem;
-
-    --sidebar-background: 0 0% 98%;
-
-    --sidebar-foreground: 240 5.3% 26.1%;
-
-    --sidebar-primary: 240 5.9% 10%;
-
-    --sidebar-primary-foreground: 0 0% 98%;
-
-    --sidebar-accent: 240 4.8% 95.9%;
-
-    --sidebar-accent-foreground: 240 5.9% 10%;
-
-    --sidebar-border: 220 13% 91%;
-
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    /* Sidebar colors */
+    --sidebar-background: 210 100% 98%;
+    --sidebar-foreground: 210 15% 15%;
+    --sidebar-primary: 210 95% 45%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 210 50% 90%;
+    --sidebar-accent-foreground: 210 15% 15%;
+    --sidebar-border: 210 30% 88%;
+    --sidebar-ring: 210 95% 45%;
   }
 
   .dark {
