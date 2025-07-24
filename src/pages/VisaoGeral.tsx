@@ -6,6 +6,7 @@ import { FiltersSection } from "@/components/dashboard/FiltersSection";
 import { TransactionUpload } from "@/components/dashboard/TransactionUpload";
 import { TransactionList } from "@/components/dashboard/TransactionList";
 import { TransactionReview } from "@/components/dashboard/TransactionReview";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useFinancialData } from "@/hooks/useFinancialData";
 import type { PendingTransaction, Transaction } from "@/types/financial";
 
@@ -14,10 +15,11 @@ export type { Transaction } from "@/types/financial";
 
 const VisaoGeral = () => {
   const { transactions, addTransactions } = useFinancialData();
-  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-  const [selectedAccount, setSelectedAccount] = useState<string>("todas");
-  const [selectedCategory, setSelectedCategory] = useState<string>("todas");
+  const [selectedMonth, setSelectedMonth] = useState<number[]>([new Date().getMonth() + 1]);
+  const [selectedYear, setSelectedYear] = useState<number[]>([new Date().getFullYear()]);
+  const [selectedAccount, setSelectedAccount] = useState<string[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<string[]>([]);
+  const [selectedSubcategory, setSelectedSubcategory] = useState<string[]>([]);
   const [showTransactions, setShowTransactions] = useState<string | null>(null);
   const [pendingTransactions, setPendingTransactions] = useState<PendingTransaction[]>([]);
   const [pendingAccount, setPendingAccount] = useState<string>("");
@@ -51,12 +53,20 @@ const VisaoGeral = () => {
 
   // Filtrar transações baseado nos filtros selecionados
   const filteredTransactions = transactions.filter(transaction => {
-    const monthMatch = transaction.month === selectedMonth;
-    const yearMatch = transaction.year === selectedYear;
-    const accountMatch = selectedAccount === "todas" || transaction.account === selectedAccount;
-    const categoryMatch = selectedCategory === "todas" || transaction.category === selectedCategory;
+    // Ignorar transferências nos cálculos
+    if (transaction.category === 'Transferências' || 
+        transaction.subcategory === 'Transferência entre Contas') {
+      return false;
+    }
+
+    const monthMatch = selectedMonth.length === 0 || selectedMonth.includes(transaction.month);
+    const yearMatch = selectedYear.length === 0 || selectedYear.includes(transaction.year);
+    const accountMatch = selectedAccount.length === 0 || selectedAccount.includes(transaction.account);
+    const categoryMatch = selectedCategory.length === 0 || selectedCategory.includes(transaction.category);
+    const subcategoryMatch = selectedSubcategory.length === 0 || 
+      (transaction.subcategory && selectedSubcategory.includes(transaction.subcategory));
     
-    return monthMatch && yearMatch && accountMatch && categoryMatch;
+    return monthMatch && yearMatch && accountMatch && categoryMatch && subcategoryMatch;
   });
 
   // Calcular KPIs
@@ -132,11 +142,13 @@ const VisaoGeral = () => {
         selectedYear={selectedYear}
         selectedAccount={selectedAccount}
         selectedCategory={selectedCategory}
+        selectedSubcategory={selectedSubcategory}
         transactions={transactions}
         onMonthChange={setSelectedMonth}
         onYearChange={setSelectedYear}
         onAccountChange={setSelectedAccount}
         onCategoryChange={setSelectedCategory}
+        onSubcategoryChange={setSelectedSubcategory}
       />
 
       <KPICards
@@ -155,6 +167,55 @@ const VisaoGeral = () => {
             data={chartData} 
             onCategoryClick={handleCategoryClick}
           />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Lançamentos</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {filteredTransactions.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <p>Nenhum lançamento encontrado para os filtros selecionados.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Data</TableHead>
+                    <TableHead>Lançamento</TableHead>
+                    <TableHead>Valor</TableHead>
+                    <TableHead>Categoria</TableHead>
+                    <TableHead>Subcategoria</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredTransactions
+                    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                    .map((transaction) => (
+                    <TableRow key={transaction.id}>
+                      <TableCell>
+                        {new Date(transaction.date).toLocaleDateString('pt-BR')}
+                      </TableCell>
+                      <TableCell className="font-medium">
+                        {transaction.description}
+                      </TableCell>
+                      <TableCell className={transaction.type === 'receita' ? 'text-primary' : 'text-destructive'}>
+                        {transaction.type === 'receita' ? '+' : '-'}R$ {transaction.amount.toLocaleString('pt-BR', { 
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2 
+                        })}
+                      </TableCell>
+                      <TableCell>{transaction.category}</TableCell>
+                      <TableCell>{transaction.subcategory || '-'}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

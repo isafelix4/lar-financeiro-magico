@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,21 +22,14 @@ export interface Divida {
 }
 
 const Dividas = () => {
-  const [dividas, setDividas] = useState<Divida[]>([]);
+  const [dividas, setDividas] = useState<Divida[]>(() => {
+    const stored = localStorage.getItem('financial-dividas');
+    return stored ? JSON.parse(stored) : [];
+  });
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [sortField, setSortField] = useState<keyof Divida | null>(null);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const { toast } = useToast();
-
-  // Dados mockados para o gráfico de evolução
-  const evolucaoDivida = [
-    { mes: 'Jan', total: 45000 },
-    { mes: 'Fev', total: 42000 },
-    { mes: 'Mar', total: 39500 },
-    { mes: 'Abr', total: 37200 },
-    { mes: 'Mai', total: 34800 },
-    { mes: 'Jun', total: 32100 },
-  ];
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -99,6 +92,16 @@ const Dividas = () => {
   const mediaTaxaJuros = dividas.length > 0 
     ? dividas.reduce((sum, divida) => sum + divida.taxaJuros, 0) / dividas.length 
     : 0;
+
+  // Dados calculados para o gráfico de evolução baseados nas dívidas reais
+  const evolucaoDivida = dividas.length > 0 
+    ? [{ mes: 'Atual', total: totalSaldoDevedor }]
+    : [];
+
+  // Persistir no localStorage
+  useEffect(() => {
+    localStorage.setItem('financial-dividas', JSON.stringify(dividas));
+  }, [dividas]);
 
   return (
     <div className="space-y-6 p-6">
@@ -206,9 +209,11 @@ const Dividas = () => {
             <TrendingDown className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-primary">R$ 2.900</div>
+            <div className="text-2xl font-bold text-primary">
+              {formatCurrency(dividas.reduce((sum, divida) => sum + divida.valorParcela, 0))}
+            </div>
             <p className="text-xs text-muted-foreground">
-              Média últimos 6 meses
+              Total parcelas mensais
             </p>
           </CardContent>
         </Card>

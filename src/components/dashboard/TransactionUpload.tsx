@@ -152,6 +152,87 @@ export const TransactionUpload = ({ onPendingTransactions }: TransactionUploadPr
   };
 
 
+  // Função para detectar delimitador em CSV
+  const detectCSVDelimiter = (text: string): string => {
+    const sample = text.split('\n').slice(0, 5).join('\n');
+    const semicolonCount = (sample.match(/;/g) || []).length;
+    const commaCount = (sample.match(/,/g) || []).length;
+    return semicolonCount > commaCount ? ';' : ',';
+  };
+
+  // Função para processar valores monetários brasileiros
+  const parseMonetaryValue = (value: string): number => {
+    if (!value) return 0;
+    
+    // Remover "R$", espaços e outros caracteres não numéricos, mantendo apenas dígitos, vírgulas e pontos
+    let cleanValue = value.toString().replace(/R\$|\s/g, '');
+    
+    // Verificar se é formato brasileiro (ponto como separador de milhares, vírgula como decimal)
+    if (cleanValue.includes(',') && cleanValue.includes('.')) {
+      // Se tem ambos, assumir que ponto é separador de milhares e vírgula é decimal
+      cleanValue = cleanValue.replace(/\./g, '').replace(',', '.');
+    } else if (cleanValue.includes(',')) {
+      // Se só tem vírgula, assumir que é separador decimal brasileiro
+      cleanValue = cleanValue.replace(',', '.');
+    }
+    // Se só tem ponto, assumir que já está no formato correto
+    
+    return Math.abs(parseFloat(cleanValue) || 0);
+  };
+
+  // Função para processar datas brasileiras
+  const parseBrazilianDate = (dateStr: string): string => {
+    if (!dateStr) return new Date().toISOString().split('T')[0];
+    
+    const dateString = dateStr.toString().trim();
+    
+    // Formato brasileiro dd/mm/yyyy
+    const ddmmyyyyRegex = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/;
+    const ddmmyyyyMatch = dateString.match(ddmmyyyyRegex);
+    if (ddmmyyyyMatch) {
+      const [, day, month, year] = ddmmyyyyMatch;
+      return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+    }
+    
+    // Formato brasileiro "dd de mm de yyyy"
+    const monthNames = {
+      'janeiro': '01', 'jan': '01',
+      'fevereiro': '02', 'fev': '02',
+      'março': '03', 'mar': '03',
+      'abril': '04', 'abr': '04',
+      'maio': '05', 'mai': '05',
+      'junho': '06', 'jun': '06',
+      'julho': '07', 'jul': '07',
+      'agosto': '08', 'ago': '08',
+      'setembro': '09', 'set': '09',
+      'outubro': '10', 'out': '10',
+      'novembro': '11', 'nov': '11',
+      'dezembro': '12', 'dez': '12'
+    };
+    
+    const textDateRegex = /^(\d{1,2})\s+de\s+(\w+)\s+de\s+(\d{4})$/i;
+    const textDateMatch = dateString.match(textDateRegex);
+    if (textDateMatch) {
+      const [, day, monthName, year] = textDateMatch;
+      const monthNumber = monthNames[monthName.toLowerCase() as keyof typeof monthNames];
+      if (monthNumber) {
+        return `${year}-${monthNumber}-${day.padStart(2, '0')}`;
+      }
+    }
+    
+    // Formato ISO ou outros formatos padrão
+    try {
+      const parsedDate = new Date(dateString);
+      if (!isNaN(parsedDate.getTime())) {
+        return parsedDate.toISOString().split('T')[0];
+      }
+    } catch {
+      // Se falhou, usar data atual
+    }
+    
+    return new Date().toISOString().split('T')[0];
+  };
+
   const parseFile = (fileData: any[], fileName: string): PendingTransaction[] => {
     const transactions: PendingTransaction[] = [];
     
@@ -162,44 +243,10 @@ export const TransactionUpload = ({ onPendingTransactions }: TransactionUploadPr
       const amountStr = row[2] || row.valor || row.Valor || row.VALOR || row.amount || row.Amount;
       
       if (date && description && amountStr !== undefined) {
-        let parsedDate: string;
-        try {
-          // Tentar diferentes formatos de data
-          if (typeof date === 'string') {
-            const dateFormats = [
-              /^\d{4}-\d{2}-\d{2}$/, // YYYY-MM-DD
-              /^\d{2}\/\d{2}\/\d{4}$/, // DD/MM/YYYY
-              /^\d{2}-\d{2}-\d{4}$/, // DD-MM-YYYY
-            ];
-            
-            if (dateFormats[0].test(date)) {
-              parsedDate = date;
-            } else if (dateFormats[1].test(date)) {
-              const [day, month, year] = date.split('/');
-              parsedDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-            } else if (dateFormats[2].test(date)) {
-              const [day, month, year] = date.split('-');
-              parsedDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-            } else {
-              parsedDate = new Date(date).toISOString().split('T')[0];
-            }
-          } else {
-            parsedDate = new Date(date).toISOString().split('T')[0];
-          }
-        } catch {
-          parsedDate = new Date().toISOString().split('T')[0];
-        }
+        const parsedDate = parseBrazilianDate(date);
+        const amount = parseMonetaryValue(amountStr);
         
-        // Processar valor - sempre trabalhar com valores absolutos
-        let amount = 0;
-        if (typeof amountStr === 'number') {
-          amount = Math.abs(amountStr);
-        } else if (typeof amountStr === 'string') {
-          const cleanValue = amountStr.replace(/[^\d.,-]/g, '').replace(',', '.');
-          amount = Math.abs(parseFloat(cleanValue));
-        }
-        
-        if (!isNaN(amount) && amount > 0) {
+        if (amount > 0) {
           const categorization = categorizeTransaction(String(description));
           
           const transaction: PendingTransaction = {
@@ -240,11 +287,12 @@ export const TransactionUpload = ({ onPendingTransactions }: TransactionUploadPr
       
       if (file.type === 'text/csv' || file.name.endsWith('.csv')) {
         const text = await file.text();
+        const delimiter = detectCSVDelimiter(text);
         const lines = text.split('\n').filter(line => line.trim());
         const dataLines = lines.slice(1); // Pular cabeçalho
         
         fileData = dataLines.map(line => {
-          const columns = line.split(',').map(col => col.trim().replace(/"/g, ''));
+          const columns = line.split(delimiter).map(col => col.trim().replace(/"/g, ''));
           return columns;
         });
       } else if (file.name.endsWith('.xlsx')) {
@@ -259,9 +307,16 @@ export const TransactionUpload = ({ onPendingTransactions }: TransactionUploadPr
         const dataLines = lines.slice(1); // Pular cabeçalho
         
         fileData = dataLines.map(line => {
-          // Assumir separação por tab ou múltiplos espaços
-          const columns = line.split(/\t|\s{2,}/).map(col => col.trim());
-          return columns;
+          // Detectar separação por tab, múltiplos espaços ou ponto e vírgula
+          let columns: string[];
+          if (line.includes('\t')) {
+            columns = line.split('\t');
+          } else if (line.includes(';')) {
+            columns = line.split(';');
+          } else {
+            columns = line.split(/\s{2,}/);
+          }
+          return columns.map(col => col.trim());
         });
       } else {
         throw new Error('Formato de arquivo não suportado. Use CSV, XLSX ou TXT.');

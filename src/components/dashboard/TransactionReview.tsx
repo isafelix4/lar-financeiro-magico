@@ -1,9 +1,12 @@
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Check, X, ArrowLeft } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Check, X, ArrowLeft, Trash2, Plus } from "lucide-react";
 import { useFinancialData } from "@/hooks/useFinancialData";
 import { useToast } from "@/hooks/use-toast";
 import type { PendingTransaction, Transaction } from "@/types/financial";
@@ -31,11 +34,41 @@ export const TransactionReview = ({
   const [reviewedTransactions, setReviewedTransactions] = useState<PendingTransaction[]>(
     pendingTransactions.map(pt => ({ ...pt }))
   );
+  
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
 
   const updateTransaction = (index: number, field: keyof PendingTransaction, value: any) => {
     setReviewedTransactions(prev => prev.map((transaction, i) => 
       i === index ? { ...transaction, [field]: value } : transaction
     ));
+  };
+
+  const removeTransaction = (index: number) => {
+    setReviewedTransactions(prev => prev.filter((_, i) => i !== index));
+    toast({
+      title: "Transação removida",
+      description: "A transação foi excluída da importação."
+    });
+  };
+
+  const addManualTransaction = (formData: FormData) => {
+    const newTransaction: PendingTransaction = {
+      id: `manual-${Date.now()}`,
+      date: formData.get('date') as string,
+      description: formData.get('description') as string,
+      amount: parseFloat(formData.get('amount') as string),
+      suggestedCategory: formData.get('category') as string,
+      suggestedSubcategory: formData.get('subcategory') as string || undefined,
+      suggestedType: formData.get('type') as 'receita' | 'despesa'
+    };
+
+    setReviewedTransactions(prev => [...prev, newTransaction]);
+    setIsAddDialogOpen(false);
+    
+    toast({
+      title: "Lançamento adicionado!",
+      description: "O lançamento manual foi adicionado à lista."
+    });
   };
 
   const handleApprove = () => {
@@ -82,6 +115,88 @@ export const TransactionReview = ({
           </h1>
         </div>
         <div className="flex items-center gap-2">
+          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline">
+                <Plus className="h-4 w-4 mr-2" />
+                Adicionar Lançamento Manual
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Adicionar Lançamento Manual</DialogTitle>
+              </DialogHeader>
+              <form onSubmit={(e) => {
+                e.preventDefault();
+                const formData = new FormData(e.currentTarget);
+                addManualTransaction(formData);
+              }} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="date">Data</Label>
+                  <Input 
+                    id="date" 
+                    name="date" 
+                    type="date" 
+                    required 
+                    defaultValue={new Date().toISOString().split('T')[0]}
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="description">Descrição</Label>
+                  <Input id="description" name="description" required placeholder="Ex: Compra no supermercado" />
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="amount">Valor</Label>
+                    <Input id="amount" name="amount" type="number" step="0.01" required placeholder="0,00" />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="type">Tipo</Label>
+                    <Select name="type" required>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione o tipo" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="despesa">Despesa</SelectItem>
+                        <SelectItem value="receita">Receita</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="category">Categoria</Label>
+                    <Select name="category" required>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione a categoria" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {categories.map(category => (
+                          <SelectItem key={category.id} value={category.name}>
+                            {category.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="subcategory">Subcategoria (Opcional)</Label>
+                    <Input id="subcategory" name="subcategory" placeholder="Ex: Supermercado" />
+                  </div>
+                </div>
+                
+                <Button type="submit" className="w-full">
+                  Adicionar Lançamento
+                </Button>
+              </form>
+            </DialogContent>
+          </Dialog>
+          
           <Button variant="outline" onClick={onCancel}>
             <X className="h-4 w-4 mr-2" />
             Cancelar
@@ -126,6 +241,14 @@ export const TransactionReview = ({
                       })}
                     </p>
                   </div>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={() => removeTransaction(index)}
+                    className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

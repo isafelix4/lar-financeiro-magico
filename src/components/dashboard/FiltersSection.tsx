@@ -4,15 +4,17 @@ import { Filter } from "lucide-react";
 import type { Transaction } from "@/pages/VisaoGeral";
 
 interface FiltersSectionProps {
-  selectedMonth: number;
-  selectedYear: number;
-  selectedAccount: string;
-  selectedCategory: string;
+  selectedMonth: number[];
+  selectedYear: number[];
+  selectedAccount: string[];
+  selectedCategory: string[];
+  selectedSubcategory: string[];
   transactions: Transaction[];
-  onMonthChange: (month: number) => void;
-  onYearChange: (year: number) => void;
-  onAccountChange: (account: string) => void;
-  onCategoryChange: (category: string) => void;
+  onMonthChange: (months: number[]) => void;
+  onYearChange: (years: number[]) => void;
+  onAccountChange: (accounts: string[]) => void;
+  onCategoryChange: (categories: string[]) => void;
+  onSubcategoryChange: (subcategories: string[]) => void;
 }
 
 const months = [
@@ -35,11 +37,13 @@ export const FiltersSection = ({
   selectedYear,
   selectedAccount,
   selectedCategory,
+  selectedSubcategory,
   transactions,
   onMonthChange,
   onYearChange,
   onAccountChange,
-  onCategoryChange
+  onCategoryChange,
+  onSubcategoryChange
 }: FiltersSectionProps) => {
   // Extrair anos únicos das transações
   const availableYears = Array.from(
@@ -56,6 +60,11 @@ export const FiltersSection = ({
     new Set(transactions.map(t => t.category))
   ).filter(Boolean);
 
+  // Extrair subcategorias únicas das transações
+  const availableSubcategories = Array.from(
+    new Set(transactions.map(t => t.subcategory).filter(Boolean))
+  ).filter(Boolean);
+
   return (
     <Card>
       <CardHeader>
@@ -65,20 +74,31 @@ export const FiltersSection = ({
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
           <div className="space-y-2">
             <label className="text-sm font-medium">Mês</label>
             <Select 
-              value={selectedMonth.toString()} 
-              onValueChange={(value) => onMonthChange(parseInt(value))}
+              value={selectedMonth.length === 1 ? selectedMonth[0].toString() : "multiplos"} 
+              onValueChange={(value) => {
+                if (value === "multiplos") return;
+                const monthValue = parseInt(value);
+                const newMonths = selectedMonth.includes(monthValue) 
+                  ? selectedMonth.filter(m => m !== monthValue)
+                  : [...selectedMonth, monthValue];
+                onMonthChange(newMonths);
+              }}
             >
               <SelectTrigger>
-                <SelectValue placeholder="Selecione o mês" />
+                <SelectValue placeholder={
+                  selectedMonth.length === 0 ? "Selecione meses" :
+                  selectedMonth.length === 1 ? months.find(m => m.value === selectedMonth[0])?.label :
+                  `${selectedMonth.length} meses selecionados`
+                } />
               </SelectTrigger>
               <SelectContent>
                 {months.map((month) => (
                   <SelectItem key={month.value} value={month.value.toString()}>
-                    {month.label}
+                    {selectedMonth.includes(month.value) ? "✓ " : ""}{month.label}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -88,17 +108,28 @@ export const FiltersSection = ({
           <div className="space-y-2">
             <label className="text-sm font-medium">Ano</label>
             <Select 
-              value={selectedYear.toString()} 
-              onValueChange={(value) => onYearChange(parseInt(value))}
+              value={selectedYear.length === 1 ? selectedYear[0].toString() : "multiplos"} 
+              onValueChange={(value) => {
+                if (value === "multiplos") return;
+                const yearValue = parseInt(value);
+                const newYears = selectedYear.includes(yearValue) 
+                  ? selectedYear.filter(y => y !== yearValue)
+                  : [...selectedYear, yearValue];
+                onYearChange(newYears);
+              }}
             >
               <SelectTrigger>
-                <SelectValue placeholder="Selecione o ano" />
+                <SelectValue placeholder={
+                  selectedYear.length === 0 ? "Selecione anos" :
+                  selectedYear.length === 1 ? selectedYear[0].toString() :
+                  `${selectedYear.length} anos selecionados`
+                } />
               </SelectTrigger>
               <SelectContent>
                 {availableYears.length > 0 ? (
                   availableYears.map((year) => (
                     <SelectItem key={year} value={year.toString()}>
-                      {year}
+                      {selectedYear.includes(year) ? "✓ " : ""}{year}
                     </SelectItem>
                   ))
                 ) : (
@@ -112,15 +143,27 @@ export const FiltersSection = ({
 
           <div className="space-y-2">
             <label className="text-sm font-medium">Conta Bancária</label>
-            <Select value={selectedAccount} onValueChange={onAccountChange}>
+            <Select 
+              value={selectedAccount.length === 1 ? selectedAccount[0] : "multiplas"} 
+              onValueChange={(value) => {
+                if (value === "multiplas") return;
+                const newAccounts = selectedAccount.includes(value) 
+                  ? selectedAccount.filter(a => a !== value)
+                  : [...selectedAccount, value];
+                onAccountChange(newAccounts);
+              }}
+            >
               <SelectTrigger>
-                <SelectValue placeholder="Selecione a conta" />
+                <SelectValue placeholder={
+                  selectedAccount.length === 0 ? "Selecione contas" :
+                  selectedAccount.length === 1 ? selectedAccount[0] :
+                  `${selectedAccount.length} contas selecionadas`
+                } />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="todas">Todas as contas</SelectItem>
                 {availableAccounts.map((account) => (
                   <SelectItem key={account} value={account}>
-                    {account}
+                    {selectedAccount.includes(account) ? "✓ " : ""}{account}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -129,15 +172,56 @@ export const FiltersSection = ({
 
           <div className="space-y-2">
             <label className="text-sm font-medium">Categoria</label>
-            <Select value={selectedCategory} onValueChange={onCategoryChange}>
+            <Select 
+              value={selectedCategory.length === 1 ? selectedCategory[0] : "multiplas"} 
+              onValueChange={(value) => {
+                if (value === "multiplas") return;
+                const newCategories = selectedCategory.includes(value) 
+                  ? selectedCategory.filter(c => c !== value)
+                  : [...selectedCategory, value];
+                onCategoryChange(newCategories);
+              }}
+            >
               <SelectTrigger>
-                <SelectValue placeholder="Selecione a categoria" />
+                <SelectValue placeholder={
+                  selectedCategory.length === 0 ? "Selecione categorias" :
+                  selectedCategory.length === 1 ? selectedCategory[0] :
+                  `${selectedCategory.length} categorias selecionadas`
+                } />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="todas">Todas as categorias</SelectItem>
                 {availableCategories.map((category) => (
                   <SelectItem key={category} value={category}>
-                    {category}
+                    {selectedCategory.includes(category) ? "✓ " : ""}{category}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Subcategoria</label>
+            <Select 
+              value={selectedSubcategory.length === 1 ? selectedSubcategory[0] : "multiplas"} 
+              onValueChange={(value) => {
+                if (value === "multiplas") return;
+                const newSubcategories = selectedSubcategory.includes(value) 
+                  ? selectedSubcategory.filter(s => s !== value)
+                  : [...selectedSubcategory, value];
+                onSubcategoryChange(newSubcategories);
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder={
+                  selectedSubcategory.length === 0 ? "Selecione subcategorias" :
+                  selectedSubcategory.length === 1 ? selectedSubcategory[0] :
+                  `${selectedSubcategory.length} subcategorias selecionadas`
+                } />
+              </SelectTrigger>
+              <SelectContent>
+                {availableSubcategories.map((subcategory) => (
+                  <SelectItem key={subcategory} value={subcategory}>
+                    {selectedSubcategory.includes(subcategory) ? "✓ " : ""}{subcategory}
                   </SelectItem>
                 ))}
               </SelectContent>
