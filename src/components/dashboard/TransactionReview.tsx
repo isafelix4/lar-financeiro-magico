@@ -157,7 +157,7 @@ export const TransactionReview = ({
                       value={transaction.suggestedCategory}
                       onValueChange={(value) => {
                         updateTransaction(index, 'suggestedCategory', value);
-                        updateTransaction(index, 'suggestedSubcategory', '');
+                        updateTransaction(index, 'suggestedSubcategory', undefined);
                       }}
                     >
                       <SelectTrigger>
@@ -178,16 +178,16 @@ export const TransactionReview = ({
                       Subcategoria
                     </label>
                     <Select
-                      value={transaction.suggestedSubcategory || ''}
+                      value={transaction.suggestedSubcategory || 'none'}
                       onValueChange={(value) => 
-                        updateTransaction(index, 'suggestedSubcategory', value || undefined)
+                        updateTransaction(index, 'suggestedSubcategory', value === 'none' ? undefined : value)
                       }
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Opcional" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">Nenhuma</SelectItem>
+                        <SelectItem value="none">Nenhuma</SelectItem>
                         {getSubcategoryOptions(transaction.suggestedCategory).map(subcategory => (
                           <SelectItem key={subcategory.id} value={subcategory.name}>
                             {subcategory.name}
