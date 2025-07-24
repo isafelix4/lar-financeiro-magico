@@ -3,10 +3,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import { Target, DollarSign, TrendingUp, AlertTriangle } from "lucide-react";
+import { Target, DollarSign, TrendingUp, AlertTriangle, Plus, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useFinancialData } from "@/hooks/useFinancialData";
 
 interface RendaSource {
   id: string;
@@ -15,31 +17,13 @@ interface RendaSource {
   restricao?: string; // Para vale-alimentação, vale-transporte, etc.
 }
 
-interface CategoriaOrcamento {
-  id: string;
-  nome: string;
-  valorPlanejado: number;
-  valorRealizado: number;
-  restricoes?: string[]; // Quais tipos de renda podem ser usados nesta categoria
-}
-
 const Planejamento = () => {
-  const [rendas, setRendas] = useState<RendaSource[]>([
-    { id: '1', nome: 'Salário', valor: 5000 },
-    { id: '2', nome: 'Vale Alimentação', valor: 800, restricao: 'alimentacao' },
-    { id: '3', nome: 'Freelance', valor: 1200 }
-  ]);
-
-  const [categorias, setCategorias] = useState<CategoriaOrcamento[]>([
-    { id: '1', nome: 'Alimentação', valorPlanejado: 1200, valorRealizado: 1050, restricoes: ['alimentacao'] },
-    { id: '2', nome: 'Transporte', valorPlanejado: 400, valorRealizado: 380 },
-    { id: '3', nome: 'Casa', valorPlanejado: 1500, valorRealizado: 1520 },
-    { id: '4', nome: 'Lazer', valorPlanejado: 600, valorRealizado: 450 },
-    { id: '5', nome: 'Saúde', valorPlanejado: 300, valorRealizado: 280 },
-    { id: '6', nome: 'Vestuário', valorPlanejado: 200, valorRealizado: 150 },
-  ]);
-
+  const { categories, budgetItems, transactions, addBudgetItem, updateBudgetItem, deleteBudgetItem } = useFinancialData();
   const { toast } = useToast();
+
+  const [rendas, setRendas] = useState<RendaSource[]>([]);
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -50,16 +34,15 @@ const Planejamento = () => {
 
   // Cálculos
   const rendaTotal = rendas.reduce((sum, renda) => sum + renda.valor, 0);
-  const gastosPlanejados = categorias.reduce((sum, cat) => sum + cat.valorPlanejado, 0);
-  const gastosRealizados = categorias.reduce((sum, cat) => sum + cat.valorRealizado, 0);
+  const gastosPlanejados = budgetItems.reduce((sum, item) => sum + item.amount, 0);
+  
+  // Calcular gastos realizados do mês selecionado
+  const gastosRealizados = transactions
+    .filter(t => t.type === 'despesa' && t.month === selectedMonth && t.year === selectedYear)
+    .reduce((sum, t) => sum + t.amount, 0);
+  
   const saldoPrevisto = rendaTotal - gastosPlanejados;
   const saldoRealizado = rendaTotal - gastosRealizados;
-
-  const handleUpdateCategoria = (id: string, valor: number) => {
-    setCategorias(prev => prev.map(cat => 
-      cat.id === id ? { ...cat, valorPlanejado: valor } : cat
-    ));
-  };
 
   const handleAddRenda = () => {
     const novaRenda: RendaSource = {
@@ -76,13 +59,52 @@ const Planejamento = () => {
     ));
   };
 
+  const handleAddBudgetLine = () => {
+    addBudgetItem({
+      categoryId: '',
+      subcategoryId: '',
+      amount: 0,
+      month: selectedMonth,
+      year: selectedYear
+    });
+  };
+
+  const handleUpdateBudgetLine = (itemId: string, field: string, value: any) => {
+    updateBudgetItem(itemId, { [field]: value });
+  };
+
+  const handleDeleteBudgetLine = (itemId: string) => {
+    deleteBudgetItem(itemId);
+  };
+
+  // Filtrar itens de orçamento para o mês/ano selecionado
+  const currentBudgetItems = budgetItems.filter(item => 
+    item.month === selectedMonth && item.year === selectedYear
+  );
+
   // Preparar dados para o gráfico comparativo
-  const chartData = categorias.map(cat => ({
-    categoria: cat.nome,
-    planejado: cat.valorPlanejado,
-    realizado: cat.valorRealizado,
-    diferenca: cat.valorRealizado - cat.valorPlanejado
-  }));
+  const chartData = currentBudgetItems.map(item => {
+    const category = categories.find(c => c.id === item.categoryId);
+    const subcategory = category?.subcategories.find(s => s.id === item.subcategoryId);
+    
+    // Calcular gasto realizado para esta categoria/subcategoria
+    const realizado = transactions
+      .filter(t => 
+        t.type === 'despesa' && 
+        t.month === selectedMonth && 
+        t.year === selectedYear &&
+        t.category === category?.name &&
+        (subcategory ? t.subcategory === subcategory.name : true)
+      )
+      .reduce((sum, t) => sum + t.amount, 0);
+
+    return {
+      categoria: subcategory ? `${category?.name} - ${subcategory.name}` : category?.name || 'Sem categoria',
+      planejado: item.amount,
+      realizado,
+      diferenca: realizado - item.amount
+    };
+  });
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
@@ -105,8 +127,31 @@ const Planejamento = () => {
     <div className="space-y-6 p-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold text-foreground">Planejamento Mensal</h1>
-        <div className="text-sm text-muted-foreground">
-          Planeje seu próximo mês e acompanhe o progresso
+        <div className="flex items-center gap-4">
+          <Select value={`${selectedMonth}`} onValueChange={(value) => setSelectedMonth(parseInt(value))}>
+            <SelectTrigger className="w-40">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {Array.from({ length: 12 }, (_, i) => (
+                <SelectItem key={i + 1} value={`${i + 1}`}>
+                  {new Date(0, i).toLocaleDateString('pt-BR', { month: 'long' })}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={`${selectedYear}`} onValueChange={(value) => setSelectedYear(parseInt(value))}>
+            <SelectTrigger className="w-24">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {Array.from({ length: 5 }, (_, i) => (
+                <SelectItem key={selectedYear + i - 2} value={`${selectedYear + i - 2}`}>
+                  {selectedYear + i - 2}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
@@ -217,85 +262,164 @@ const Planejamento = () => {
           </CardContent>
         </Card>
 
-        {/* Alocação por Categoria */}
+        {/* Planejamento Granular */}
         <Card>
           <CardHeader>
-            <CardTitle>Alocação por Categoria</CardTitle>
+            <CardTitle className="flex items-center justify-between">
+              <span>Orçamento Detalhado</span>
+              <Button size="sm" onClick={handleAddBudgetLine}>
+                <Plus className="h-4 w-4 mr-2" />
+                Adicionar Linha
+              </Button>
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {categorias.map((categoria) => {
-              const percentualGasto = categoria.valorPlanejado > 0 
-                ? (categoria.valorRealizado / categoria.valorPlanejado) * 100 
-                : 0;
-              
-              return (
-                <div key={categoria.id} className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-sm font-medium">{categoria.nome}</Label>
-                    <span className="text-sm text-muted-foreground">
-                      {formatCurrency(categoria.valorRealizado)} / {formatCurrency(categoria.valorPlanejado)}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <Input
-                      type="number"
-                      value={categoria.valorPlanejado}
-                      onChange={(e) => handleUpdateCategoria(categoria.id, parseFloat(e.target.value) || 0)}
-                      className="w-32"
-                    />
-                    <div className="flex-1">
-                      <Progress 
-                        value={Math.min(percentualGasto, 100)} 
-                        className={`h-2 ${percentualGasto > 100 ? 'bg-danger/20' : ''}`}
+            {currentBudgetItems.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <Target className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p>Nenhum item de orçamento definido para este mês.</p>
+                <p className="text-sm">Adicione linhas de orçamento para planejar seus gastos.</p>
+              </div>
+            ) : (
+              currentBudgetItems.map((item) => {
+                const category = categories.find(c => c.id === item.categoryId);
+                const subcategory = category?.subcategories.find(s => s.id === item.subcategoryId);
+                
+                // Calcular gasto realizado
+                const realizado = transactions
+                  .filter(t => 
+                    t.type === 'despesa' && 
+                    t.month === selectedMonth && 
+                    t.year === selectedYear &&
+                    t.category === category?.name &&
+                    (subcategory ? t.subcategory === subcategory.name : true)
+                  )
+                  .reduce((sum, t) => sum + t.amount, 0);
+
+                const percentualGasto = item.amount > 0 ? (realizado / item.amount) * 100 : 0;
+                
+                return (
+                  <div key={item.id} className="space-y-3 p-4 border rounded-lg">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                      <Select 
+                        value={item.categoryId} 
+                        onValueChange={(value) => handleUpdateBudgetLine(item.id, 'categoryId', value)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Categoria" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {categories.filter(c => c.type === 'despesa').map(category => (
+                            <SelectItem key={category.id} value={category.id}>
+                              {category.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+
+                      <Select 
+                        value={item.subcategoryId || ''} 
+                        onValueChange={(value) => handleUpdateBudgetLine(item.id, 'subcategoryId', value || undefined)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Subcategoria" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="">Nenhuma</SelectItem>
+                          {category?.subcategories.map(subcategory => (
+                            <SelectItem key={subcategory.id} value={subcategory.id}>
+                              {subcategory.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+
+                      <Input
+                        type="number"
+                        placeholder="Valor orçado"
+                        value={item.amount}
+                        onChange={(e) => handleUpdateBudgetLine(item.id, 'amount', parseFloat(e.target.value) || 0)}
                       />
+
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleDeleteBudgetLine(item.id)}
+                        className="text-destructive hover:text-destructive"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </div>
-                    <span className={`text-xs font-medium ${
-                      percentualGasto > 100 ? 'text-danger' : 
-                      percentualGasto > 80 ? 'text-warning' : 'text-success'
-                    }`}>
-                      {percentualGasto.toFixed(0)}%
-                    </span>
+
+                    {item.amount > 0 && (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">
+                            {subcategory ? `${category?.name} - ${subcategory.name}` : category?.name}
+                          </span>
+                          <span className="text-muted-foreground">
+                            {formatCurrency(realizado)} / {formatCurrency(item.amount)}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <div className="flex-1">
+                            <Progress 
+                              value={Math.min(percentualGasto, 100)} 
+                              className={`h-2 ${percentualGasto > 100 ? 'bg-danger/20' : ''}`}
+                            />
+                          </div>
+                          <span className={`text-xs font-medium ${
+                            percentualGasto > 100 ? 'text-danger' : 
+                            percentualGasto > 80 ? 'text-warning' : 'text-success'
+                          }`}>
+                            {percentualGasto.toFixed(0)}%
+                          </span>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                </div>
-              );
-            })}
+                );
+              })
+            )}
           </CardContent>
         </Card>
       </div>
 
       {/* Gráfico Comparativo */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Planejado vs. Realizado</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="h-96">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis 
-                  dataKey="categoria" 
-                  angle={-45}
-                  textAnchor="end"
-                  height={100}
-                  interval={0}
-                />
-                <YAxis tickFormatter={(value) => formatCurrency(value)} />
-                <Tooltip content={<CustomTooltip />} />
-                <Bar dataKey="planejado" fill="hsl(var(--primary))" name="Planejado" />
-                <Bar dataKey="realizado" name="Realizado">
-                  {chartData.map((entry, index) => (
-                    <Cell 
-                      key={`cell-${index}`} 
-                      fill={entry.diferenca > 0 ? 'hsl(var(--danger))' : 'hsl(var(--success))'}
-                    />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </CardContent>
-      </Card>
+      {chartData.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Planejado vs. Realizado</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="h-96">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis 
+                    dataKey="categoria" 
+                    angle={-45}
+                    textAnchor="end"
+                    height={100}
+                    interval={0}
+                  />
+                  <YAxis tickFormatter={(value) => formatCurrency(value)} />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Bar dataKey="planejado" fill="hsl(var(--primary))" name="Planejado" />
+                  <Bar dataKey="realizado" name="Realizado">
+                    {chartData.map((entry, index) => (
+                      <Cell 
+                        key={`cell-${index}`} 
+                        fill={entry.diferenca > 0 ? 'hsl(var(--danger))' : 'hsl(var(--success))'}
+                      />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Resumo e Ações */}
       <Card>

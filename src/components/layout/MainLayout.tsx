@@ -7,6 +7,7 @@ import {
   CreditCard, 
   Target, 
   TrendingUp,
+  Settings,
   Menu,
   X
 } from "lucide-react";
@@ -39,6 +40,12 @@ const MainLayout = ({ children }: MainLayoutProps) => {
       href: "/planejamento",
       icon: Target,
       description: "Orçamento mensal e comparativo planejado vs realizado"
+    },
+    {
+      name: "Configurações",
+      href: "/configuracoes",
+      icon: Settings,
+      description: "Gerenciar categorias e subcategorias"
     }
   ];
 

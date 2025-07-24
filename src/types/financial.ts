@@ -31,9 +31,9 @@ export interface Transaction {
 
 export interface BudgetItem {
   id: string;
-  category: string;
-  subcategory?: string;
-  plannedAmount: number;
+  categoryId: string;
+  subcategoryId?: string;
+  amount: number;
   month: number;
   year: number;
 }
