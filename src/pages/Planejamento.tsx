@@ -318,14 +318,14 @@ const Planejamento = () => {
                       </Select>
 
                       <Select 
-                        value={item.subcategoryId || ''} 
-                        onValueChange={(value) => handleUpdateBudgetLine(item.id, 'subcategoryId', value || undefined)}
+                        value={item.subcategoryId || 'none'} 
+                        onValueChange={(value) => handleUpdateBudgetLine(item.id, 'subcategoryId', value === 'none' ? undefined : value)}
                       >
                         <SelectTrigger>
                           <SelectValue placeholder="Subcategoria" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="">Nenhuma</SelectItem>
+                          <SelectItem value="none">Nenhuma</SelectItem>
                           {category?.subcategories.map(subcategory => (
                             <SelectItem key={subcategory.id} value={subcategory.id}>
                               {subcategory.name}
