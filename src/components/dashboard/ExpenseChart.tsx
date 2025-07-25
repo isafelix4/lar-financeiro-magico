@@ -2,6 +2,7 @@ import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, 
 import { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { BarChart3, PieChart as PieChartIcon } from "lucide-react";
+import { SubcategoryChart } from "./SubcategoryChart";
 
 interface ExpenseChartProps {
   data: Array<{
@@ -9,7 +10,13 @@ interface ExpenseChartProps {
     amount: number;
     percentage: string;
   }>;
+  subcategoryData?: Array<{
+    subcategory: string;
+    amount: number;
+  }>;
+  selectedCategory?: string;
   onCategoryClick: (category: string) => void;
+  onBackToCategories?: () => void;
 }
 
 const COLORS = [
@@ -18,11 +25,30 @@ const COLORS = [
   'hsl(var(--chart-3))',
   'hsl(var(--chart-4))',
   'hsl(var(--chart-5))',
-  'hsl(var(--chart-6))'
+  'hsl(220, 70%, 50%)',
+  'hsl(280, 65%, 55%)',
+  'hsl(340, 75%, 60%)',
+  'hsl(25, 80%, 55%)',
+  'hsl(190, 75%, 50%)',
+  'hsl(160, 70%, 45%)',
+  'hsl(60, 80%, 50%)'
 ];
 
-export const ExpenseChart = ({ data, onCategoryClick }: ExpenseChartProps) => {
+// Generate unique colors for categories
+const generateColors = (count: number) => {
+  const colors = [];
+  for (let i = 0; i < count; i++) {
+    colors.push(COLORS[i % COLORS.length]);
+  }
+  return colors;
+};
+
+export const ExpenseChart = ({ data, subcategoryData, selectedCategory, onCategoryClick, onBackToCategories }: ExpenseChartProps) => {
   const [chartType, setChartType] = useState<'pie' | 'bar'>('pie');
+  
+  // Sort data in descending order for better visualization
+  const sortedData = [...data].sort((a, b) => b.amount - a.amount);
+  const colors = generateColors(sortedData.length);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -53,6 +79,17 @@ export const ExpenseChart = ({ data, onCategoryClick }: ExpenseChartProps) => {
     onCategoryClick(entry.category);
   };
 
+  // Show subcategory chart if data is available
+  if (subcategoryData && selectedCategory && onBackToCategories) {
+    return (
+      <SubcategoryChart 
+        data={subcategoryData}
+        categoryName={selectedCategory}
+        onBack={onBackToCategories}
+      />
+    );
+  }
+
   if (data.length === 0) {
     return (
       <div className="flex items-center justify-center h-64 text-muted-foreground">
@@ -82,56 +119,83 @@ export const ExpenseChart = ({ data, onCategoryClick }: ExpenseChartProps) => {
         </Button>
       </div>
 
-      <div className="h-96">
-        <ResponsiveContainer width="100%" height="100%">
-          {chartType === 'pie' ? (
-            <PieChart>
-              <Pie
-                data={data}
-                cx="50%"
-                cy="50%"
-                labelLine={false}
-                label={({ category, percentage }) => `${category}: ${percentage}%`}
-                outerRadius={120}
-                fill="#8884d8"
-                dataKey="amount"
-                onClick={handlePieClick}
-                className="cursor-pointer"
-              >
-                {data.map((entry, index) => (
-                  <Cell 
-                    key={`cell-${index}`} 
-                    fill={COLORS[index % COLORS.length]}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2">
+          <div className="h-96">
+            <ResponsiveContainer width="100%" height="100%">
+              {chartType === 'pie' ? (
+                <PieChart>
+                  <Pie
+                    data={sortedData}
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={120}
+                    fill="#8884d8"
+                    dataKey="amount"
+                    onClick={handlePieClick}
+                    className="cursor-pointer"
+                  >
+                    {sortedData.map((entry, index) => (
+                      <Cell 
+                        key={`cell-${index}`} 
+                        fill={colors[index]}
+                      />
+                    ))}
+                  </Pie>
+                  <Tooltip content={<CustomTooltip />} />
+                </PieChart>
+              ) : (
+                <BarChart data={sortedData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis 
+                    dataKey="category" 
+                    angle={-45}
+                    textAnchor="end"
+                    height={100}
+                    interval={0}
                   />
-                ))}
-              </Pie>
-              <Tooltip content={<CustomTooltip />} />
-            </PieChart>
-          ) : (
-            <BarChart data={data}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis 
-                dataKey="category" 
-                angle={-45}
-                textAnchor="end"
-                height={100}
-                interval={0}
-              />
-              <YAxis 
-                tickFormatter={(value) => formatCurrency(value)}
-              />
-              <Tooltip content={<CustomTooltip />} />
-              <Legend />
-              <Bar 
-                dataKey="amount" 
-                fill="hsl(var(--primary))"
-                onClick={handleBarClick}
-                className="cursor-pointer"
-                name="Valor Gasto"
-              />
-            </BarChart>
-          )}
-        </ResponsiveContainer>
+                  <YAxis 
+                    tickFormatter={(value) => formatCurrency(value)}
+                  />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Legend />
+                  <Bar 
+                    dataKey="amount" 
+                    fill="hsl(var(--primary))"
+                    onClick={handleBarClick}
+                    className="cursor-pointer"
+                    name="Valor Gasto"
+                  />
+                </BarChart>
+              )}
+            </ResponsiveContainer>
+          </div>
+        </div>
+        
+        {/* Legend */}
+        <div className="space-y-2">
+          <h4 className="font-semibold text-lg">Categorias</h4>
+          <div className="space-y-2 max-h-96 overflow-y-auto">
+            {sortedData.map((item, index) => (
+              <div 
+                key={item.category}
+                className="flex items-center gap-3 p-2 rounded-lg border hover:bg-muted/50 cursor-pointer transition-colors"
+                onClick={() => onCategoryClick(item.category)}
+              >
+                <div 
+                  className="w-4 h-4 rounded-full flex-shrink-0"
+                  style={{ backgroundColor: colors[index] }}
+                />
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-sm truncate">{item.category}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {formatCurrency(item.amount)} ({item.percentage}%)
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
 
       <div className="text-center text-sm text-muted-foreground">

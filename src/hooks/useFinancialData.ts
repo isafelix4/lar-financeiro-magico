@@ -221,6 +221,16 @@ export const useFinancialData = () => {
     setTransactions(prev => [...prev, ...newTransactions]);
   };
 
+  const updateTransaction = (transactionId: string, updates: Partial<Transaction>) => {
+    setTransactions(prev => prev.map(transaction => 
+      transaction.id === transactionId ? { ...transaction, ...updates } : transaction
+    ));
+  };
+
+  const deleteTransaction = (transactionId: string) => {
+    setTransactions(prev => prev.filter(transaction => transaction.id !== transactionId));
+  };
+
   const addBudgetItem = (item: Omit<BudgetItem, 'id'>) => {
     const newItem: BudgetItem = {
       ...item,
@@ -251,6 +261,8 @@ export const useFinancialData = () => {
     deleteSubcategory,
     addAccount,
     addTransactions,
+    updateTransaction,
+    deleteTransaction,
     addBudgetItem,
     updateBudgetItem,
     deleteBudgetItem

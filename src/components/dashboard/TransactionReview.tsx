@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,6 +10,17 @@ import { Check, X, ArrowLeft, Trash2, Plus } from "lucide-react";
 import { useFinancialData } from "@/hooks/useFinancialData";
 import { useToast } from "@/hooks/use-toast";
 import type { PendingTransaction, Transaction } from "@/types/financial";
+
+interface DebtItem {
+  id: string;
+  name: string;
+  remainingInstallments: number;
+  outstandingBalance: number;
+}
+
+interface ExtendedPendingTransaction extends PendingTransaction {
+  linkedDebtId?: string;
+}
 
 interface TransactionReviewProps {
   pendingTransactions: PendingTransaction[];
@@ -31,13 +42,23 @@ export const TransactionReview = ({
   const { categories } = useFinancialData();
   const { toast } = useToast();
   
-  const [reviewedTransactions, setReviewedTransactions] = useState<PendingTransaction[]>(
+  const [reviewedTransactions, setReviewedTransactions] = useState<ExtendedPendingTransaction[]>(
     pendingTransactions.map(pt => ({ ...pt }))
   );
   
+  const [debts, setDebts] = useState<DebtItem[]>([]);
+
+  // Load debts from localStorage
+  useEffect(() => {
+    const storedDebts = localStorage.getItem('financial-debts');
+    if (storedDebts) {
+      setDebts(JSON.parse(storedDebts));
+    }
+  }, []);
+  
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
 
-  const updateTransaction = (index: number, field: keyof PendingTransaction, value: any) => {
+  const updateTransaction = (index: number, field: keyof ExtendedPendingTransaction, value: any) => {
     setReviewedTransactions(prev => prev.map((transaction, i) => 
       i === index ? { ...transaction, [field]: value } : transaction
     ));
@@ -52,14 +73,27 @@ export const TransactionReview = ({
   };
 
   const addManualTransaction = (formData: FormData) => {
-    const newTransaction: PendingTransaction = {
+    const subcategory = formData.get('subcategory') as string;
+    const category = formData.get('category') as string;
+    
+    if (!subcategory) {
+      toast({
+        title: "Erro",
+        description: "Subcategoria é obrigatória.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const newTransaction: ExtendedPendingTransaction = {
       id: `manual-${Date.now()}`,
       date: formData.get('date') as string,
       description: formData.get('description') as string,
       amount: parseFloat(formData.get('amount') as string),
-      suggestedCategory: formData.get('category') as string,
-      suggestedSubcategory: formData.get('subcategory') as string || undefined,
-      suggestedType: formData.get('type') as 'receita' | 'despesa'
+      suggestedCategory: category,
+      suggestedSubcategory: subcategory,
+      suggestedType: formData.get('type') as 'receita' | 'despesa',
+      linkedDebtId: category === 'Dívidas' ? formData.get('linkedDebt') as string : undefined
     };
 
     setReviewedTransactions(prev => [...prev, newTransaction]);
@@ -72,6 +106,31 @@ export const TransactionReview = ({
   };
 
   const handleApprove = () => {
+    // Validate all transactions have required subcategory
+    const invalidTransactions = reviewedTransactions.filter(pt => !pt.suggestedSubcategory);
+    if (invalidTransactions.length > 0) {
+      toast({
+        title: "Erro de validação",
+        description: "Todas as transações devem ter uma subcategoria definida.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Validate debt transactions have linked debt
+    const debtTransactions = reviewedTransactions.filter(pt => 
+      pt.suggestedCategory === 'Dívidas' && pt.suggestedType === 'despesa'
+    );
+    const invalidDebtTransactions = debtTransactions.filter(pt => !pt.linkedDebtId);
+    if (invalidDebtTransactions.length > 0) {
+      toast({
+        title: "Erro de validação",
+        description: "Todas as despesas de dívida devem ser vinculadas a uma dívida específica.",
+        variant: "destructive"
+      });
+      return;
+    }
+
     const finalTransactions: Transaction[] = reviewedTransactions.map(pt => ({
       id: `transaction-${Date.now()}-${Math.random()}`,
       date: pt.date,
@@ -85,12 +144,35 @@ export const TransactionReview = ({
       year: selectedYear
     }));
 
+    // Update linked debts
+    debtTransactions.forEach(pt => {
+      if (pt.linkedDebtId) {
+        updateDebt(pt.linkedDebtId, Math.abs(pt.amount));
+      }
+    });
+
     onApprove(finalTransactions);
     
     toast({
       title: "Transações aprovadas!",
       description: `${finalTransactions.length} transações foram importadas com sucesso.`
     });
+  };
+
+  const updateDebt = (debtId: string, paymentAmount: number) => {
+    const updatedDebts = debts.map(debt => {
+      if (debt.id === debtId) {
+        return {
+          ...debt,
+          outstandingBalance: Math.max(0, debt.outstandingBalance - paymentAmount),
+          remainingInstallments: Math.max(0, debt.remainingInstallments - 1)
+        };
+      }
+      return debt;
+    });
+    
+    setDebts(updatedDebts);
+    localStorage.setItem('financial-debts', JSON.stringify(updatedDebts));
   };
 
   const getCategoryOptions = (type: 'receita' | 'despesa') => {
@@ -185,9 +267,28 @@ export const TransactionReview = ({
                   </div>
                   
                   <div className="space-y-2">
-                    <Label htmlFor="subcategory">Subcategoria (Opcional)</Label>
-                    <Input id="subcategory" name="subcategory" placeholder="Ex: Supermercado" />
+                    <Label htmlFor="subcategory">Subcategoria *</Label>
+                    <Input id="subcategory" name="subcategory" placeholder="Ex: Supermercado" required />
                   </div>
+                </div>
+
+                {/* Debt linking field - shown only for debt category */}
+                <div className="space-y-2" id="debt-linking" style={{ display: 'none' }}>
+                  <Label htmlFor="linkedDebt">Vincular à Dívida *</Label>
+                  <Select name="linkedDebt">
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione a dívida" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {debts
+                        .filter(debt => debt.remainingInstallments > 0)
+                        .map(debt => (
+                          <SelectItem key={debt.id} value={debt.id}>
+                            {debt.name} (Restam {debt.remainingInstallments} parcelas)
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 
                 <Button type="submit" className="w-full">
@@ -298,19 +399,19 @@ export const TransactionReview = ({
 
                   <div>
                     <label className="text-sm font-medium text-foreground mb-2 block">
-                      Subcategoria
+                      Subcategoria *
                     </label>
                     <Select
-                      value={transaction.suggestedSubcategory || 'none'}
+                      value={transaction.suggestedSubcategory || ''}
                       onValueChange={(value) => 
-                        updateTransaction(index, 'suggestedSubcategory', value === 'none' ? undefined : value)
+                        updateTransaction(index, 'suggestedSubcategory', value)
                       }
+                      required
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder="Opcional" />
+                        <SelectValue placeholder="Selecione uma subcategoria" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="none">Nenhuma</SelectItem>
                         {getSubcategoryOptions(transaction.suggestedCategory).map(subcategory => (
                           <SelectItem key={subcategory.id} value={subcategory.name}>
                             {subcategory.name}
@@ -320,6 +421,35 @@ export const TransactionReview = ({
                     </Select>
                   </div>
                 </div>
+
+                {/* Debt linking field */}
+                {transaction.suggestedCategory === 'Dívidas' && transaction.suggestedType === 'despesa' && (
+                  <div className="mt-4">
+                    <label className="text-sm font-medium text-foreground mb-2 block">
+                      Vincular à Dívida *
+                    </label>
+                    <Select
+                      value={(transaction as ExtendedPendingTransaction).linkedDebtId || ''}
+                      onValueChange={(value) => 
+                        updateTransaction(index, 'linkedDebtId', value)
+                      }
+                      required
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione a dívida" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {debts
+                          .filter(debt => debt.remainingInstallments > 0)
+                          .map(debt => (
+                            <SelectItem key={debt.id} value={debt.id}>
+                              {debt.name} (Restam {debt.remainingInstallments} parcelas)
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
               </div>
             ))}
           </div>

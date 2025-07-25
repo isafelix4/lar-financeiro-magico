@@ -1,20 +1,27 @@
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { KPICards } from "@/components/dashboard/KPICards";
 import { ExpenseChart } from "@/components/dashboard/ExpenseChart";
 import { FiltersSection } from "@/components/dashboard/FiltersSection";
 import { TransactionUpload } from "@/components/dashboard/TransactionUpload";
 import { TransactionList } from "@/components/dashboard/TransactionList";
 import { TransactionReview } from "@/components/dashboard/TransactionReview";
+import { TransactionEditDialog } from "@/components/dashboard/TransactionEditDialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useFinancialData } from "@/hooks/useFinancialData";
+import { useToast } from "@/hooks/use-toast";
+import { MoreHorizontal, Edit, Trash2 } from "lucide-react";
 import type { PendingTransaction, Transaction } from "@/types/financial";
 
 // Export Transaction type from types/financial.ts
 export type { Transaction } from "@/types/financial";
 
 const VisaoGeral = () => {
-  const { transactions, addTransactions } = useFinancialData();
+  const { transactions, addTransactions, updateTransaction, deleteTransaction } = useFinancialData();
+  const { toast } = useToast();
   const [selectedMonth, setSelectedMonth] = useState<number[]>([new Date().getMonth() + 1]);
   const [selectedYear, setSelectedYear] = useState<number[]>([new Date().getFullYear()]);
   const [selectedAccount, setSelectedAccount] = useState<string[]>([]);
@@ -26,6 +33,8 @@ const VisaoGeral = () => {
   const [pendingMonth, setPendingMonth] = useState<number>(0);
   const [pendingYear, setPendingYear] = useState<number>(0);
   const [showReview, setShowReview] = useState(false);
+  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
+  const [showSubcategories, setShowSubcategories] = useState<string | null>(null);
 
   const handlePendingTransactions = (
     transactions: PendingTransaction[], 
@@ -100,7 +109,42 @@ const VisaoGeral = () => {
   }));
 
   const handleCategoryClick = (category: string) => {
-    setShowTransactions(category);
+    setShowSubcategories(category);
+  };
+
+  const handleEditTransaction = (transaction: Transaction) => {
+    setEditingTransaction(transaction);
+  };
+
+  const handleUpdateTransaction = (updatedTransaction: Transaction) => {
+    updateTransaction(updatedTransaction.id, updatedTransaction);
+    setEditingTransaction(null);
+  };
+
+  const handleDeleteTransaction = (transactionId: string) => {
+    deleteTransaction(transactionId);
+    toast({
+      title: "Lançamento excluído!",
+      description: "O lançamento foi removido com sucesso."
+    });
+  };
+
+  // Prepare subcategory data for drill-down
+  const getSubcategoryData = (category: string) => {
+    const categoryTransactions = filteredTransactions.filter(
+      t => t.category === category && t.type === 'despesa'
+    );
+    
+    const subcategoryTotals = categoryTransactions.reduce((acc, transaction) => {
+      const subcategory = transaction.subcategory || 'Sem Subcategoria';
+      acc[subcategory] = (acc[subcategory] || 0) + transaction.amount;
+      return acc;
+    }, {} as Record<string, number>);
+
+    return Object.entries(subcategoryTotals).map(([subcategory, amount]) => ({
+      subcategory,
+      amount
+    }));
   };
 
   if (showReview) {
@@ -165,7 +209,10 @@ const VisaoGeral = () => {
         <CardContent>
           <ExpenseChart 
             data={chartData} 
+            subcategoryData={showSubcategories ? getSubcategoryData(showSubcategories) : undefined}
+            selectedCategory={showSubcategories || undefined}
             onCategoryClick={handleCategoryClick}
+            onBackToCategories={() => setShowSubcategories(null)}
           />
         </CardContent>
       </Card>
@@ -189,6 +236,7 @@ const VisaoGeral = () => {
                     <TableHead>Valor</TableHead>
                     <TableHead>Categoria</TableHead>
                     <TableHead>Subcategoria</TableHead>
+                    <TableHead className="w-12">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -210,6 +258,43 @@ const VisaoGeral = () => {
                       </TableCell>
                       <TableCell>{transaction.category}</TableCell>
                       <TableCell>{transaction.subcategory || '-'}</TableCell>
+                      <TableCell>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="sm">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent>
+                            <DropdownMenuItem onClick={() => handleEditTransaction(transaction)}>
+                              <Edit className="h-4 w-4 mr-2" />
+                              Editar
+                            </DropdownMenuItem>
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                                  <Trash2 className="h-4 w-4 mr-2" />
+                                  Excluir
+                                </DropdownMenuItem>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Tem certeza que deseja excluir este lançamento? Esta ação não pode ser desfeita.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                  <AlertDialogAction onClick={() => handleDeleteTransaction(transaction.id)}>
+                                    Excluir
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -218,6 +303,13 @@ const VisaoGeral = () => {
           )}
         </CardContent>
       </Card>
+
+      <TransactionEditDialog
+        transaction={editingTransaction}
+        isOpen={!!editingTransaction}
+        onClose={() => setEditingTransaction(null)}
+        onUpdate={handleUpdateTransaction}
+      />
     </div>
   );
 };
