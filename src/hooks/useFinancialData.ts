@@ -209,6 +209,12 @@ export const useFinancialData = () => {
   };
 
   const addAccount = (account: Omit<Account, 'id'>) => {
+    // Verificar se já existe uma conta com esse nome
+    const existingAccount = accounts.find(acc => acc.name.toLowerCase() === account.name.toLowerCase());
+    if (existingAccount) {
+      return existingAccount;
+    }
+
     const newAccount: Account = {
       ...account,
       id: `account-${Date.now()}`
@@ -249,6 +255,25 @@ export const useFinancialData = () => {
     setBudgetItems(prev => prev.filter(item => item.id !== itemId));
   };
 
+  // Função para processar pagamento de dívida
+  const processarPagamentoDivida = (dividaId: string, valorPagamento: number) => {
+    // Esta função será implementada quando integrarmos com a página de dívidas
+    // Por enquanto, armazenamos a informação para futura integração
+    const pagamentoInfo = {
+      dividaId,
+      valorPagamento,
+      data: new Date().toISOString()
+    };
+    
+    // Armazenar no localStorage para que a página de dívidas possa processar
+    const pagamentos = JSON.parse(localStorage.getItem('debt-payments') || '[]');
+    pagamentos.push(pagamentoInfo);
+    localStorage.setItem('debt-payments', JSON.stringify(pagamentos));
+    
+    // Disparar evento customizado para notificar outras partes da aplicação
+    window.dispatchEvent(new CustomEvent('debt-payment', { detail: pagamentoInfo }));
+  };
+
   return {
     categories,
     accounts,
@@ -265,6 +290,7 @@ export const useFinancialData = () => {
     deleteTransaction,
     addBudgetItem,
     updateBudgetItem,
-    deleteBudgetItem
+    deleteBudgetItem,
+    processarPagamentoDivida
   };
 };

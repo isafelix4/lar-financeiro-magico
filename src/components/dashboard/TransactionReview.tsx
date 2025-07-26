@@ -50,9 +50,16 @@ export const TransactionReview = ({
 
   // Load debts from localStorage
   useEffect(() => {
-    const storedDebts = localStorage.getItem('financial-debts');
+    const storedDebts = localStorage.getItem('financial-dividas');
     if (storedDebts) {
-      setDebts(JSON.parse(storedDebts));
+      const dividasData = JSON.parse(storedDebts);
+      const debtsFormatted = dividasData.map((divida: any) => ({
+        id: divida.id,
+        name: `${divida.credor} - ${divida.descricao}`,
+        remainingInstallments: divida.parcelasRestantes,
+        outstandingBalance: divida.saldoDevedor
+      }));
+      setDebts(debtsFormatted);
     }
   }, []);
   
@@ -160,19 +167,28 @@ export const TransactionReview = ({
   };
 
   const updateDebt = (debtId: string, paymentAmount: number) => {
-    const updatedDebts = debts.map(debt => {
-      if (debt.id === debtId) {
-        return {
-          ...debt,
-          outstandingBalance: Math.max(0, debt.outstandingBalance - paymentAmount),
-          remainingInstallments: Math.max(0, debt.remainingInstallments - 1)
-        };
-      }
-      return debt;
-    });
-    
-    setDebts(updatedDebts);
-    localStorage.setItem('financial-debts', JSON.stringify(updatedDebts));
+    // Atualizar as dívidas no localStorage
+    const storedDebts = localStorage.getItem('financial-dividas');
+    if (storedDebts) {
+      const dividasData = JSON.parse(storedDebts);
+      const updatedDividas = dividasData.map((divida: any) => {
+        if (divida.id === debtId) {
+          return {
+            ...divida,
+            saldoDevedor: Math.max(0, divida.saldoDevedor - paymentAmount),
+            parcelasRestantes: Math.max(0, divida.parcelasRestantes - 1)
+          };
+        }
+        return divida;
+      });
+      
+      localStorage.setItem('financial-dividas', JSON.stringify(updatedDividas));
+      
+      // Disparar evento para atualizar a página de dívidas
+      window.dispatchEvent(new CustomEvent('debt-payment', { 
+        detail: { debtId, paymentAmount } 
+      }));
+    }
   };
 
   const getCategoryOptions = (type: 'receita' | 'despesa') => {

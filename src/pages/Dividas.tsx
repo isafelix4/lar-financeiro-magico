@@ -5,8 +5,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { Plus, ArrowUpDown, TrendingDown, Calculator } from "lucide-react";
+import { Plus, ArrowUpDown, TrendingDown, Calculator, Edit, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 export interface Divida {
@@ -27,6 +28,7 @@ const Dividas = () => {
     return stored ? JSON.parse(stored) : [];
   });
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [editingDivida, setEditingDivida] = useState<Divida | null>(null);
   const [sortField, setSortField] = useState<keyof Divida | null>(null);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const { toast } = useToast();
@@ -58,6 +60,54 @@ const Dividas = () => {
       title: "Dívida adicionada!",
       description: `Dívida com ${novaDivida.credor} foi adicionada com sucesso.`,
     });
+  };
+
+  const handleEditDivida = (formData: FormData) => {
+    if (!editingDivida) return;
+
+    const dividaAtualizada: Divida = {
+      ...editingDivida,
+      credor: formData.get('credor') as string,
+      descricao: formData.get('descricao') as string,
+      valorInicial: parseFloat(formData.get('valorInicial') as string),
+      valorAtual: parseFloat(formData.get('valorAtual') as string),
+      taxaJuros: parseFloat(formData.get('taxaJuros') as string),
+      valorParcela: parseFloat(formData.get('valorParcela') as string),
+      parcelasRestantes: parseInt(formData.get('parcelasRestantes') as string),
+      saldoDevedor: parseFloat(formData.get('saldoDevedor') as string),
+    };
+
+    setDividas(prev => prev.map(d => d.id === editingDivida.id ? dividaAtualizada : d));
+    setEditingDivida(null);
+    
+    toast({
+      title: "Dívida atualizada!",
+      description: `Dívida com ${dividaAtualizada.credor} foi atualizada com sucesso.`,
+    });
+  };
+
+  const handleDeleteDivida = (dividaId: string) => {
+    const divida = dividas.find(d => d.id === dividaId);
+    setDividas(prev => prev.filter(d => d.id !== dividaId));
+    
+    toast({
+      title: "Dívida removida!",
+      description: `Dívida com ${divida?.credor} foi removida com sucesso.`,
+    });
+  };
+
+  // Função para processar pagamento de dívida (será chamada pelo hook useFinancialData)
+  const processarPagamentoDivida = (dividaId: string, valorPagamento: number) => {
+    setDividas(prev => prev.map(divida => {
+      if (divida.id === dividaId && divida.parcelasRestantes > 0) {
+        return {
+          ...divida,
+          saldoDevedor: Math.max(0, divida.saldoDevedor - valorPagamento),
+          parcelasRestantes: Math.max(0, divida.parcelasRestantes - 1)
+        };
+      }
+      return divida;
+    }));
   };
 
   const handleSort = (field: keyof Divida) => {
@@ -103,72 +153,146 @@ const Dividas = () => {
     localStorage.setItem('financial-dividas', JSON.stringify(dividas));
   }, [dividas]);
 
+  // Escutar eventos de pagamento de dívidas
+  useEffect(() => {
+    const handleDebtPayment = (event: CustomEvent) => {
+      const { debtId, paymentAmount } = event.detail;
+      processarPagamentoDivida(debtId, paymentAmount);
+    };
+
+    window.addEventListener('debt-payment', handleDebtPayment as EventListener);
+    
+    return () => {
+      window.removeEventListener('debt-payment', handleDebtPayment as EventListener);
+    };
+  }, []);
+
   return (
     <div className="space-y-6 p-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold text-foreground">Mapa de Dívidas</h1>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <Dialog open={isDialogOpen || !!editingDivida} onOpenChange={(open) => {
+          if (!open) {
+            setIsDialogOpen(false);
+            setEditingDivida(null);
+          }
+        }}>
           <DialogTrigger asChild>
-            <Button>
+            <Button onClick={() => setIsDialogOpen(true)}>
               <Plus className="h-4 w-4 mr-2" />
               Nova Dívida
             </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
-              <DialogTitle>Adicionar Nova Dívida</DialogTitle>
+              <DialogTitle>{editingDivida ? 'Editar Dívida' : 'Adicionar Nova Dívida'}</DialogTitle>
             </DialogHeader>
             <form onSubmit={(e) => {
               e.preventDefault();
               const formData = new FormData(e.currentTarget);
-              handleAddDivida(formData);
+              if (editingDivida) {
+                handleEditDivida(formData);
+              } else {
+                handleAddDivida(formData);
+              }
             }} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="credor">Credor</Label>
-                  <Input id="credor" name="credor" required />
+                  <Input 
+                    id="credor" 
+                    name="credor" 
+                    defaultValue={editingDivida?.credor || ''} 
+                    required 
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="descricao">Descrição</Label>
-                  <Input id="descricao" name="descricao" required />
+                  <Input 
+                    id="descricao" 
+                    name="descricao" 
+                    defaultValue={editingDivida?.descricao || ''} 
+                    required 
+                  />
                 </div>
               </div>
               
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="valorInicial">Valor Inicial</Label>
-                  <Input id="valorInicial" name="valorInicial" type="number" step="0.01" required />
+                  <Input 
+                    id="valorInicial" 
+                    name="valorInicial" 
+                    type="number" 
+                    step="0.01" 
+                    defaultValue={editingDivida?.valorInicial || ''} 
+                    required 
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="valorAtual">Valor Total Atualizado</Label>
-                  <Input id="valorAtual" name="valorAtual" type="number" step="0.01" required />
+                  <Input 
+                    id="valorAtual" 
+                    name="valorAtual" 
+                    type="number" 
+                    step="0.01" 
+                    defaultValue={editingDivida?.valorAtual || ''} 
+                    required 
+                  />
                 </div>
               </div>
               
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="taxaJuros">Taxa de Juros (% a.m.)</Label>
-                  <Input id="taxaJuros" name="taxaJuros" type="number" step="0.01" required />
+                  <Input 
+                    id="taxaJuros" 
+                    name="taxaJuros" 
+                    type="number" 
+                    step="0.01" 
+                    defaultValue={editingDivida?.taxaJuros || ''} 
+                    required 
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="valorParcela">Valor da Parcela</Label>
-                  <Input id="valorParcela" name="valorParcela" type="number" step="0.01" required />
+                  <Input 
+                    id="valorParcela" 
+                    name="valorParcela" 
+                    type="number" 
+                    step="0.01" 
+                    defaultValue={editingDivida?.valorParcela || ''} 
+                    required 
+                  />
                 </div>
               </div>
               
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="parcelasRestantes">Parcelas Restantes</Label>
-                  <Input id="parcelasRestantes" name="parcelasRestantes" type="number" required />
+                  <Input 
+                    id="parcelasRestantes" 
+                    name="parcelasRestantes" 
+                    type="number" 
+                    defaultValue={editingDivida?.parcelasRestantes || ''} 
+                    required 
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="saldoDevedor">Saldo Devedor</Label>
-                  <Input id="saldoDevedor" name="saldoDevedor" type="number" step="0.01" required />
+                  <Input 
+                    id="saldoDevedor" 
+                    name="saldoDevedor" 
+                    type="number" 
+                    step="0.01" 
+                    defaultValue={editingDivida?.saldoDevedor || ''} 
+                    required 
+                  />
                 </div>
               </div>
               
               <Button type="submit" className="w-full">
-                Adicionar Dívida
+                {editingDivida ? 'Atualizar Dívida' : 'Adicionar Dívida'}
               </Button>
             </form>
           </DialogContent>
@@ -334,6 +458,7 @@ const Dividas = () => {
                         <ArrowUpDown className="h-4 w-4" />
                       </div>
                     </TableHead>
+                    <TableHead className="w-[100px]">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -348,6 +473,47 @@ const Dividas = () => {
                       <TableCell>{divida.parcelasRestantes}x</TableCell>
                       <TableCell className="font-bold text-danger">
                         {formatCurrency(divida.saldoDevedor)}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setEditingDivida(divida)}
+                            className="h-8 w-8 p-0"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Tem certeza que deseja excluir a dívida com {divida.credor}? 
+                                  Esta ação não pode ser desfeita.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() => handleDeleteDivida(divida.id)}
+                                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                >
+                                  Excluir
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}

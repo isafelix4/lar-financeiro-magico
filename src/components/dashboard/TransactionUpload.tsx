@@ -295,12 +295,6 @@ export const TransactionUpload = ({ onPendingTransactions }: TransactionUploadPr
           const columns = line.split(delimiter).map(col => col.trim().replace(/"/g, ''));
           return columns;
         });
-      } else if (file.name.endsWith('.xlsx')) {
-        const arrayBuffer = await file.arrayBuffer();
-        const workbook = XLSX.read(arrayBuffer, { type: 'array' });
-        const sheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[sheetName];
-        fileData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }).slice(1); // Pular cabeçalho
       } else if (file.type === 'text/plain' || file.name.endsWith('.txt')) {
         const text = await file.text();
         const lines = text.split('\n').filter(line => line.trim());
@@ -319,7 +313,7 @@ export const TransactionUpload = ({ onPendingTransactions }: TransactionUploadPr
           return columns.map(col => col.trim());
         });
       } else {
-        throw new Error('Formato de arquivo não suportado. Use CSV, XLSX ou TXT.');
+        throw new Error('Formato de arquivo não suportado. Use CSV ou TXT.');
       }
       
       const pendingTransactions = parseFile(fileData, file.name);
@@ -332,7 +326,11 @@ export const TransactionUpload = ({ onPendingTransactions }: TransactionUploadPr
       let finalAccount = selectedAccount;
       if (newAccountName && !selectedAccount) {
         const newAccount = addAccount({ name: newAccountName });
-        finalAccount = newAccount.id;
+        finalAccount = newAccount.name; // Usar o nome da conta em vez do ID
+      } else if (selectedAccount) {
+        // Encontrar o nome da conta pelo ID selecionado
+        const account = accounts.find(acc => acc.id === selectedAccount);
+        finalAccount = account ? account.name : selectedAccount;
       }
       
       onPendingTransactions(pendingTransactions, finalAccount, selectedMonth, selectedYear);

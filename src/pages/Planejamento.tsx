@@ -36,9 +36,15 @@ const Planejamento = () => {
   const rendaTotal = rendas.reduce((sum, renda) => sum + renda.valor, 0);
   const gastosPlanejados = budgetItems.reduce((sum, item) => sum + item.amount, 0);
   
-  // Calcular gastos realizados do mês selecionado
+  // Calcular gastos realizados do mês selecionado (excluindo transferências)
   const gastosRealizados = transactions
-    .filter(t => t.type === 'despesa' && t.month === selectedMonth && t.year === selectedYear)
+    .filter(t => 
+      t.type === 'despesa' && 
+      t.month === selectedMonth && 
+      t.year === selectedYear &&
+      t.category !== 'Transferências' &&
+      t.subcategory !== 'Transferência entre Contas'
+    )
     .reduce((sum, t) => sum + t.amount, 0);
   
   const saldoPrevisto = rendaTotal - gastosPlanejados;
@@ -87,16 +93,18 @@ const Planejamento = () => {
     const category = categories.find(c => c.id === item.categoryId);
     const subcategory = category?.subcategories.find(s => s.id === item.subcategoryId);
     
-    // Calcular gasto realizado para esta categoria/subcategoria
-    const realizado = transactions
-      .filter(t => 
-        t.type === 'despesa' && 
-        t.month === selectedMonth && 
-        t.year === selectedYear &&
-        t.category === category?.name &&
-        (subcategory ? t.subcategory === subcategory.name : true)
-      )
-      .reduce((sum, t) => sum + t.amount, 0);
+                // Calcular gasto realizado para esta categoria/subcategoria (excluindo transferências)
+                const realizado = transactions
+                  .filter(t => 
+                    t.type === 'despesa' && 
+                    t.month === selectedMonth && 
+                    t.year === selectedYear &&
+                    t.category === category?.name &&
+                    (subcategory ? t.subcategory === subcategory.name : true) &&
+                    t.category !== 'Transferências' &&
+                    t.subcategory !== 'Transferência entre Contas'
+                  )
+                  .reduce((sum, t) => sum + t.amount, 0);
 
     return {
       categoria: subcategory ? `${category?.name} - ${subcategory.name}` : category?.name || 'Sem categoria',
@@ -285,14 +293,16 @@ const Planejamento = () => {
                 const category = categories.find(c => c.id === item.categoryId);
                 const subcategory = category?.subcategories.find(s => s.id === item.subcategoryId);
                 
-                // Calcular gasto realizado
+                // Calcular gasto realizado (excluindo transferências)
                 const realizado = transactions
                   .filter(t => 
                     t.type === 'despesa' && 
                     t.month === selectedMonth && 
                     t.year === selectedYear &&
                     t.category === category?.name &&
-                    (subcategory ? t.subcategory === subcategory.name : true)
+                    (subcategory ? t.subcategory === subcategory.name : true) &&
+                    t.category !== 'Transferências' &&
+                    t.subcategory !== 'Transferência entre Contas'
                   )
                   .reduce((sum, t) => sum + t.amount, 0);
 
