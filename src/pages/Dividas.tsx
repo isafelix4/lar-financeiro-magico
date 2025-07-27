@@ -6,32 +6,23 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { Plus, ArrowUpDown, TrendingDown, Calculator, Edit, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-
-export interface Divida {
-  id: string;
-  credor: string;
-  descricao: string;
-  valorInicial: number;
-  valorAtual: number;
-  taxaJuros: number;
-  valorParcela: number;
-  parcelasRestantes: number;
-  saldoDevedor: number;
-}
+import { DebtEvolutionChart } from "@/components/dashboard/DebtEvolutionChart";
+import type { Debt } from "@/types/financial";
+import { useFinancialData } from "@/hooks/useFinancialData";
 
 const Dividas = () => {
-  const [dividas, setDividas] = useState<Divida[]>(() => {
+  const [dividas, setDividas] = useState<Debt[]>(() => {
     const stored = localStorage.getItem('financial-dividas');
     return stored ? JSON.parse(stored) : [];
   });
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingDivida, setEditingDivida] = useState<Divida | null>(null);
-  const [sortField, setSortField] = useState<keyof Divida | null>(null);
+  const [editingDivida, setEditingDivida] = useState<Debt | null>(null);
+  const [sortField, setSortField] = useState<keyof Debt | null>(null);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const { toast } = useToast();
+  const { transactions } = useFinancialData();
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -41,7 +32,7 @@ const Dividas = () => {
   };
 
   const handleAddDivida = (formData: FormData) => {
-    const novaDivida: Divida = {
+    const novaDivida: Debt = {
       id: Date.now().toString(),
       credor: formData.get('credor') as string,
       descricao: formData.get('descricao') as string,
@@ -51,6 +42,8 @@ const Dividas = () => {
       valorParcela: parseFloat(formData.get('valorParcela') as string),
       parcelasRestantes: parseInt(formData.get('parcelasRestantes') as string),
       saldoDevedor: parseFloat(formData.get('saldoDevedor') as string),
+      dataInicio: formData.get('dataInicio') as string,
+      status: 'Em dia',
     };
 
     setDividas(prev => [...prev, novaDivida]);
@@ -65,7 +58,7 @@ const Dividas = () => {
   const handleEditDivida = (formData: FormData) => {
     if (!editingDivida) return;
 
-    const dividaAtualizada: Divida = {
+    const dividaAtualizada: Debt = {
       ...editingDivida,
       credor: formData.get('credor') as string,
       descricao: formData.get('descricao') as string,
@@ -75,6 +68,8 @@ const Dividas = () => {
       valorParcela: parseFloat(formData.get('valorParcela') as string),
       parcelasRestantes: parseInt(formData.get('parcelasRestantes') as string),
       saldoDevedor: parseFloat(formData.get('saldoDevedor') as string),
+      dataInicio: formData.get('dataInicio') as string,
+      status: formData.get('status') as 'Em dia' | 'Em atraso' | 'Suspensa',
     };
 
     setDividas(prev => prev.map(d => d.id === editingDivida.id ? dividaAtualizada : d));
@@ -110,7 +105,7 @@ const Dividas = () => {
     }));
   };
 
-  const handleSort = (field: keyof Divida) => {
+  const handleSort = (field: keyof Debt) => {
     if (sortField === field) {
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
     } else {
@@ -138,15 +133,22 @@ const Dividas = () => {
     return 0;
   });
 
+  // Calculate debt payments from current month transactions
+  const currentMonth = new Date().getMonth() + 1;
+  const currentYear = new Date().getFullYear();
+  
+  const monthlyDebtPayments = transactions
+    .filter(t => 
+      t.category === 'Dívidas' && 
+      t.month === currentMonth && 
+      t.year === currentYear
+    )
+    .reduce((sum, t) => sum + t.amount, 0);
+
   const totalSaldoDevedor = dividas.reduce((sum, divida) => sum + divida.saldoDevedor, 0);
   const mediaTaxaJuros = dividas.length > 0 
     ? dividas.reduce((sum, divida) => sum + divida.taxaJuros, 0) / dividas.length 
     : 0;
-
-  // Dados calculados para o gráfico de evolução baseados nas dívidas reais
-  const evolucaoDivida = dividas.length > 0 
-    ? [{ mes: 'Atual', total: totalSaldoDevedor }]
-    : [];
 
   // Persistir no localStorage
   useEffect(() => {
@@ -278,22 +280,51 @@ const Dividas = () => {
                     required 
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="saldoDevedor">Saldo Devedor</Label>
-                  <Input 
-                    id="saldoDevedor" 
-                    name="saldoDevedor" 
-                    type="number" 
-                    step="0.01" 
-                    defaultValue={editingDivida?.saldoDevedor || ''} 
-                    required 
-                  />
+                  <div className="space-y-2">
+                    <Label htmlFor="saldoDevedor">Saldo Devedor</Label>
+                    <Input 
+                      id="saldoDevedor" 
+                      name="saldoDevedor" 
+                      type="number" 
+                      step="0.01" 
+                      defaultValue={editingDivida?.saldoDevedor || ''} 
+                      required 
+                    />
+                  </div>
                 </div>
-              </div>
-              
-              <Button type="submit" className="w-full">
-                {editingDivida ? 'Atualizar Dívida' : 'Adicionar Dívida'}
-              </Button>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="dataInicio">Data de Início</Label>
+                    <Input 
+                      id="dataInicio" 
+                      name="dataInicio" 
+                      type="date" 
+                      defaultValue={editingDivida?.dataInicio || ''} 
+                      required 
+                    />
+                  </div>
+                  {editingDivida && (
+                    <div className="space-y-2">
+                      <Label htmlFor="status">Status</Label>
+                      <select 
+                        id="status" 
+                        name="status" 
+                        defaultValue={editingDivida?.status || 'Em dia'}
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                        required
+                      >
+                        <option value="Em dia">Em dia</option>
+                        <option value="Em atraso">Em atraso</option>
+                        <option value="Suspensa">Suspensa</option>
+                      </select>
+                    </div>
+                  )}
+                </div>
+                
+                <Button type="submit" className="w-full">
+                  {editingDivida ? 'Atualizar Dívida' : 'Adicionar Dívida'}
+                </Button>
             </form>
           </DialogContent>
         </Dialog>
@@ -334,10 +365,10 @@ const Dividas = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-primary">
-              {formatCurrency(dividas.reduce((sum, divida) => sum + divida.valorParcela, 0))}
+              {formatCurrency(monthlyDebtPayments)}
             </div>
             <p className="text-xs text-muted-foreground">
-              Total parcelas mensais
+              Valor pago no mês
             </p>
           </CardContent>
         </Card>
@@ -346,28 +377,10 @@ const Dividas = () => {
       {/* Gráfico de Evolução */}
       <Card>
         <CardHeader>
-          <CardTitle>Evolução da Dívida Total</CardTitle>
+          <CardTitle>Evolução da Dívida Total e Quantidade de Dívidas Ativas</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={evolucaoDivida}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="mes" />
-                <YAxis tickFormatter={(value) => formatCurrency(value)} />
-                <Tooltip 
-                  formatter={(value: number) => [formatCurrency(value), 'Total das Dívidas']}
-                />
-                <Line 
-                  type="monotone" 
-                  dataKey="total" 
-                  stroke="hsl(var(--danger))" 
-                  strokeWidth={3}
-                  dot={{ fill: 'hsl(var(--danger))', strokeWidth: 2, r: 4 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
+          <DebtEvolutionChart debts={dividas} />
         </CardContent>
       </Card>
 
@@ -458,6 +471,15 @@ const Dividas = () => {
                         <ArrowUpDown className="h-4 w-4" />
                       </div>
                     </TableHead>
+                    <TableHead 
+                      className="cursor-pointer hover:bg-muted" 
+                      onClick={() => handleSort('status')}
+                    >
+                      <div className="flex items-center gap-1">
+                        Status
+                        <ArrowUpDown className="h-4 w-4" />
+                      </div>
+                    </TableHead>
                     <TableHead className="w-[100px]">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -473,6 +495,17 @@ const Dividas = () => {
                       <TableCell>{divida.parcelasRestantes}x</TableCell>
                       <TableCell className="font-bold text-danger">
                         {formatCurrency(divida.saldoDevedor)}
+                      </TableCell>
+                      <TableCell>
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                          divida.status === 'Em dia' 
+                            ? 'bg-success/10 text-success' 
+                            : divida.status === 'Em atraso'
+                            ? 'bg-destructive/10 text-destructive'
+                            : 'bg-warning/10 text-warning'
+                        }`}>
+                          {divida.status}
+                        </span>
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">

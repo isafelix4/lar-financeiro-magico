@@ -47,3 +47,18 @@ export interface PendingTransaction {
   suggestedSubcategory?: string;
   suggestedType: 'receita' | 'despesa';
 }
+
+export interface Debt {
+  id: string;
+  credor: string;
+  descricao: string;
+  valorInicial: number;
+  valorAtual: number;
+  taxaJuros: number;
+  valorParcela: number;
+  parcelasRestantes: number;
+  saldoDevedor: number;
+  dataInicio: string;
+  status: 'Em dia' | 'Em atraso' | 'Suspensa';
+  ultimoPagamento?: string;
+}

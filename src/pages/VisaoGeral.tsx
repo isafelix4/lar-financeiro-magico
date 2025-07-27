@@ -13,7 +13,7 @@ import { TransactionEditDialog } from "@/components/dashboard/TransactionEditDia
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useFinancialData } from "@/hooks/useFinancialData";
 import { useToast } from "@/hooks/use-toast";
-import { MoreHorizontal, Edit, Trash2 } from "lucide-react";
+import { MoreHorizontal, Edit, Trash2, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import type { PendingTransaction, Transaction } from "@/types/financial";
 
 // Export Transaction type from types/financial.ts
@@ -35,6 +35,8 @@ const VisaoGeral = () => {
   const [showReview, setShowReview] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [showSubcategories, setShowSubcategories] = useState<string | null>(null);
+  const [sortField, setSortField] = useState<keyof Transaction | null>(null);
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
 
   const handlePendingTransactions = (
     transactions: PendingTransaction[], 
@@ -147,6 +149,51 @@ const VisaoGeral = () => {
     }));
   };
 
+  const handleSort = (field: keyof Transaction) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('desc');
+    }
+  };
+
+  const getSortIcon = (field: keyof Transaction) => {
+    if (sortField !== field) {
+      return <ArrowUpDown className="h-4 w-4" />;
+    }
+    return sortDirection === 'asc' ? 
+      <ArrowUp className="h-4 w-4" /> : 
+      <ArrowDown className="h-4 w-4" />;
+  };
+
+  const sortTransactions = (transactions: Transaction[]) => {
+    if (!sortField) return transactions;
+    
+    return [...transactions].sort((a, b) => {
+      const aValue = a[sortField];
+      const bValue = b[sortField];
+      
+      if (sortField === 'date') {
+        const aDate = new Date(aValue as string).getTime();
+        const bDate = new Date(bValue as string).getTime();
+        return sortDirection === 'asc' ? aDate - bDate : bDate - aDate;
+      }
+      
+      if (typeof aValue === 'number' && typeof bValue === 'number') {
+        return sortDirection === 'asc' ? aValue - bValue : bValue - aValue;
+      }
+      
+      if (typeof aValue === 'string' && typeof bValue === 'string') {
+        return sortDirection === 'asc' 
+          ? aValue.localeCompare(bValue)
+          : bValue.localeCompare(aValue);
+      }
+      
+      return 0;
+    });
+  };
+
   if (showReview) {
     return (
       <TransactionReview
@@ -231,17 +278,48 @@ const VisaoGeral = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Data</TableHead>
-                    <TableHead>Lançamento</TableHead>
-                    <TableHead>Valor</TableHead>
-                    <TableHead>Categoria</TableHead>
+                    <TableHead 
+                      className="cursor-pointer hover:bg-muted"
+                      onClick={() => handleSort('date')}
+                    >
+                      <div className="flex items-center gap-1">
+                        Data
+                        {getSortIcon('date')}
+                      </div>
+                    </TableHead>
+                    <TableHead 
+                      className="cursor-pointer hover:bg-muted"
+                      onClick={() => handleSort('description')}
+                    >
+                      <div className="flex items-center gap-1">
+                        Lançamento
+                        {getSortIcon('description')}
+                      </div>
+                    </TableHead>
+                    <TableHead 
+                      className="cursor-pointer hover:bg-muted"
+                      onClick={() => handleSort('amount')}
+                    >
+                      <div className="flex items-center gap-1">
+                        Valor
+                        {getSortIcon('amount')}
+                      </div>
+                    </TableHead>
+                    <TableHead 
+                      className="cursor-pointer hover:bg-muted"
+                      onClick={() => handleSort('category')}
+                    >
+                      <div className="flex items-center gap-1">
+                        Categoria
+                        {getSortIcon('category')}
+                      </div>
+                    </TableHead>
                     <TableHead>Subcategoria</TableHead>
                     <TableHead className="w-12">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredTransactions
-                    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                  {sortTransactions(filteredTransactions)
                     .map((transaction) => (
                     <TableRow key={transaction.id}>
                       <TableCell>

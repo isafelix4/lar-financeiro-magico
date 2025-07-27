@@ -19,13 +19,25 @@ interface ExpenseChartProps {
   onBackToCategories?: () => void;
 }
 
-const COLORS = [
+const CATEGORY_COLORS: Record<string, string> = {
+  'Alimentação': 'hsl(var(--chart-1))',
+  'Transporte': 'hsl(var(--chart-2))',
+  'Lazer': 'hsl(var(--chart-3))',
+  'Casa': 'hsl(var(--chart-4))',
+  'Saúde': 'hsl(var(--chart-5))',
+  'Dívidas': 'hsl(0, 84%, 60%)',
+  'Vestuário': 'hsl(280, 65%, 55%)',
+  'Educação': 'hsl(160, 70%, 45%)',
+  'Outros': 'hsl(220, 70%, 50%)',
+};
+
+const DEFAULT_COLORS = [
   'hsl(var(--chart-1))',
   'hsl(var(--chart-2))', 
   'hsl(var(--chart-3))',
   'hsl(var(--chart-4))',
   'hsl(var(--chart-5))',
-  'hsl(220, 70%, 50%)',
+  'hsl(0, 84%, 60%)',
   'hsl(280, 65%, 55%)',
   'hsl(340, 75%, 60%)',
   'hsl(25, 80%, 55%)',
@@ -34,13 +46,14 @@ const COLORS = [
   'hsl(60, 80%, 50%)'
 ];
 
-// Generate unique colors for categories
-const generateColors = (count: number) => {
-  const colors = [];
-  for (let i = 0; i < count; i++) {
-    colors.push(COLORS[i % COLORS.length]);
-  }
-  return colors;
+// Generate consistent colors for categories
+const getCategoryColor = (category: string, index: number) => {
+  return CATEGORY_COLORS[category] || DEFAULT_COLORS[index % DEFAULT_COLORS.length];
+};
+
+// Generate colors for all categories consistently
+const generateCategoryColors = (data: Array<{ category: string }>) => {
+  return data.map((item, index) => getCategoryColor(item.category, index));
 };
 
 export const ExpenseChart = ({ data, subcategoryData, selectedCategory, onCategoryClick, onBackToCategories }: ExpenseChartProps) => {
@@ -48,7 +61,7 @@ export const ExpenseChart = ({ data, subcategoryData, selectedCategory, onCatego
   
   // Sort data in descending order for better visualization
   const sortedData = [...data].sort((a, b) => b.amount - a.amount);
-  const colors = generateColors(sortedData.length);
+  const colors = generateCategoryColors(sortedData);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -161,11 +174,17 @@ export const ExpenseChart = ({ data, subcategoryData, selectedCategory, onCatego
                   <Legend />
                   <Bar 
                     dataKey="amount" 
-                    fill="hsl(var(--primary))"
                     onClick={handleBarClick}
                     className="cursor-pointer"
                     name="Valor Gasto"
-                  />
+                  >
+                    {sortedData.map((entry, index) => (
+                      <Cell 
+                        key={`bar-cell-${index}`} 
+                        fill={colors[index]}
+                      />
+                    ))}
+                  </Bar>
                 </BarChart>
               )}
             </ResponsiveContainer>

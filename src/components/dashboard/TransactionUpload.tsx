@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Upload, FileText, AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useFinancialData } from "@/hooks/useFinancialData";
-import * as XLSX from 'xlsx';
+// XLSX support removed - only CSV and TXT formats are accepted
 import type { PendingTransaction } from "@/types/financial";
 
 interface TransactionUploadProps {
@@ -444,7 +444,7 @@ export const TransactionUpload = ({ onPendingTransactions }: TransactionUploadPr
             </p>
             <input
               type="file"
-              accept=".csv,.xlsx,.txt"
+              accept=".csv,.txt"
               onChange={handleFileUpload}
               disabled={isUploading}
               className="hidden"
@@ -468,7 +468,7 @@ export const TransactionUpload = ({ onPendingTransactions }: TransactionUploadPr
                   <strong>3 colunas:</strong> Data, Lançamento (Descrição), Valor
                 </p>
                 <p className="text-muted-foreground mt-1">
-                  <strong>Formatos aceitos:</strong> CSV, XLSX, TXT
+                  <strong>Formatos aceitos:</strong> CSV, TXT
                 </p>
                 <p className="text-muted-foreground mt-1">
                   As transações serão categorizadas automaticamente e você poderá revisar antes de confirmar.

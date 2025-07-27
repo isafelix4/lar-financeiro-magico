@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import type { Category, Subcategory, Account, Transaction, BudgetItem } from '@/types/financial';
+import type { Category, Subcategory, Account, Transaction, BudgetItem, Debt } from '@/types/financial';
 
 const DEFAULT_CATEGORIES: Category[] = [
   {
@@ -147,6 +147,11 @@ export const useFinancialData = () => {
     return stored ? JSON.parse(stored) : [];
   });
 
+  const [debts, setDebts] = useState<Debt[]>(() => {
+    const stored = localStorage.getItem('financial-dividas');
+    return stored ? JSON.parse(stored) : [];
+  });
+
   useEffect(() => {
     localStorage.setItem('financial-categories', JSON.stringify(categories));
   }, [categories]);
@@ -162,6 +167,10 @@ export const useFinancialData = () => {
   useEffect(() => {
     localStorage.setItem('financial-budget', JSON.stringify(budgetItems));
   }, [budgetItems]);
+
+  useEffect(() => {
+    localStorage.setItem('financial-dividas', JSON.stringify(debts));
+  }, [debts]);
 
   const addCategory = (category: Omit<Category, 'id'>) => {
     const newCategory: Category = {
@@ -255,30 +264,90 @@ export const useFinancialData = () => {
     setBudgetItems(prev => prev.filter(item => item.id !== itemId));
   };
 
-  // Função para processar pagamento de dívida
+  // Função para processar pagamento de dívida com automação completa
   const processarPagamentoDivida = (dividaId: string, valorPagamento: number) => {
-    // Esta função será implementada quando integrarmos com a página de dívidas
-    // Por enquanto, armazenamos a informação para futura integração
-    const pagamentoInfo = {
-      dividaId,
-      valorPagamento,
-      data: new Date().toISOString()
-    };
+    const currentDate = new Date();
     
-    // Armazenar no localStorage para que a página de dívidas possa processar
-    const pagamentos = JSON.parse(localStorage.getItem('debt-payments') || '[]');
-    pagamentos.push(pagamentoInfo);
-    localStorage.setItem('debt-payments', JSON.stringify(pagamentos));
+    setDebts(prev => prev.map(debt => {
+      if (debt.id === dividaId && debt.parcelasRestantes > 0) {
+        return {
+          ...debt,
+          saldoDevedor: Math.max(0, debt.saldoDevedor - valorPagamento),
+          parcelasRestantes: Math.max(0, debt.parcelasRestantes - 1),
+          status: 'Em dia',
+          ultimoPagamento: currentDate.toISOString()
+        };
+      }
+      return debt;
+    }));
     
-    // Disparar evento customizado para notificar outras partes da aplicação
-    window.dispatchEvent(new CustomEvent('debt-payment', { detail: pagamentoInfo }));
+    // Notificar outras partes da aplicação
+    window.dispatchEvent(new CustomEvent('debt-payment', { 
+      detail: { dividaId, valorPagamento, data: currentDate.toISOString() }
+    }));
   };
+
+  // Função para aplicar capitalização de juros e atualizar status
+  const aplicarCapitalizacaoEAtualizarStatus = () => {
+    const currentDate = new Date();
+    const currentMonth = currentDate.getMonth() + 1;
+    const currentYear = currentDate.getFullYear();
+    
+    setDebts(prev => prev.map(debt => {
+      const debtStartDate = new Date(debt.dataInicio);
+      const hasPaymentThisMonth = transactions.some(t => 
+        t.category === 'Dívidas' && 
+        t.month === currentMonth && 
+        t.year === currentYear &&
+        // Here we would need a way to link transactions to debts
+        // For now, we'll check if there are any debt payments this month
+        true
+      );
+      
+      // Update status based on payment history
+      let newStatus = debt.status;
+      if (hasPaymentThisMonth) {
+        newStatus = 'Em dia';
+      } else if (debt.status !== 'Suspensa') {
+        // Check if no payments in last 2 months (simplified logic)
+        const twoMonthsAgo = new Date();
+        twoMonthsAgo.setMonth(twoMonthsAgo.getMonth() - 2);
+        
+        if (debt.ultimoPagamento) {
+          const lastPaymentDate = new Date(debt.ultimoPagamento);
+          if (lastPaymentDate < twoMonthsAgo) {
+            newStatus = 'Em atraso';
+          }
+        } else if (debtStartDate < twoMonthsAgo) {
+          newStatus = 'Em atraso';
+        }
+      }
+      
+      // Apply interest capitalization if no payment and debt is active
+      let newSaldoDevedor = debt.saldoDevedor;
+      if (!hasPaymentThisMonth && currentDate > debtStartDate && debt.parcelasRestantes > 0) {
+        newSaldoDevedor = debt.saldoDevedor * (1 + (debt.taxaJuros / 100));
+      }
+      
+      return {
+        ...debt,
+        saldoDevedor: newSaldoDevedor,
+        status: newStatus
+      };
+    }));
+  };
+
+  // Run monthly debt updates
+  useEffect(() => {
+    aplicarCapitalizacaoEAtualizarStatus();
+  }, [transactions]); // Run when transactions change
 
   return {
     categories,
     accounts,
     transactions,
     budgetItems,
+    debts,
     addCategory,
     updateCategory,
     deleteCategory,
@@ -291,6 +360,7 @@ export const useFinancialData = () => {
     addBudgetItem,
     updateBudgetItem,
     deleteBudgetItem,
-    processarPagamentoDivida
+    processarPagamentoDivida,
+    aplicarCapitalizacaoEAtualizarStatus
   };
 };
