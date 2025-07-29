@@ -23,7 +23,7 @@ const CATEGORY_COLORS: Record<string, string> = {
   'Alimentação': 'hsl(var(--chart-1))',
   'Transporte': 'hsl(var(--chart-2))',
   'Lazer': 'hsl(var(--chart-3))',
-  'Casa': 'hsl(var(--chart-4))',
+  'Casa': 'hsl(270, 70%, 45%)', // Cor fixa roxa para Casa/Moradia
   'Saúde': 'hsl(var(--chart-5))',
   'Dívidas': 'hsl(0, 84%, 60%)', // Cor fixa vermelha para dívidas
   'Transferências': 'hsl(25, 80%, 55%)',
@@ -48,7 +48,7 @@ const DEFAULT_COLORS = [
 ];
 
 // Cores reservadas que não devem ser usadas por outras categorias
-const RESERVED_COLORS = ['hsl(0, 84%, 60%)']; // Vermelho reservado para Dívidas
+const RESERVED_COLORS = ['hsl(0, 84%, 60%)', 'hsl(270, 70%, 45%)']; // Vermelho para Dívidas e Roxo para Casa
 
 // Generate consistent colors for categories, avoiding reserved colors
 const getCategoryColor = (category: string, index: number) => {

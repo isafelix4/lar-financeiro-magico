@@ -90,9 +90,9 @@ const Investimentos = () => {
     return acc;
   }, [] as Array<{ tipo: string; valor: number; aporte: number; ganho: number }>);
 
-  // Monthly evolution data
+  // Monthly evolution data - 12 months like debt chart
   const monthlyEvolution = [];
-  for (let i = 5; i >= 0; i--) {
+  for (let i = 11; i >= 0; i--) {
     const date = new Date();
     date.setMonth(date.getMonth() - i);
     const month = date.getMonth() + 1;
@@ -108,20 +108,33 @@ const Investimentos = () => {
       )
       .reduce((sum, t) => sum + t.amount, 0);
 
-    // Calculate theoretical gains (simplified)
-    const totalValueAtMonth = investments.reduce((sum, inv) => {
-      const monthsFromStart = (year - parseInt(inv.dataPrimeiroAporte.split('-')[0])) * 12 + 
-                             (month - parseInt(inv.dataPrimeiroAporte.split('-')[1]));
-      if (monthsFromStart >= 0) {
-        return sum + inv.valorAportado * Math.pow(1 + inv.rentabilidadeMensal / 100, monthsFromStart);
+    // Calculate capital gains for that specific month
+    const totalAportadoAteOPeríodo = investments.reduce((sum, inv) => {
+      const investmentStartDate = new Date(inv.dataPrimeiroAporte);
+      const periodDate = new Date(year, month - 1, 1);
+      
+      if (investmentStartDate <= periodDate) {
+        return sum + inv.valorAportado;
       }
       return sum;
     }, 0);
 
+    const totalAtualizadoAteOPeríodo = investments.reduce((sum, inv) => {
+      const investmentStartDate = new Date(inv.dataPrimeiroAporte);
+      const periodDate = new Date(year, month - 1, 1);
+      
+      if (investmentStartDate <= periodDate) {
+        return sum + inv.valorAtualizado;
+      }
+      return sum;
+    }, 0);
+
+    const ganhoCapitalDoMes = Math.max(0, totalAtualizadoAteOPeríodo - totalAportadoAteOPeríodo);
+
     monthlyEvolution.push({
-      mes: `${month.toString().padStart(2, '0')}/${year}`,
+      mes: date.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' }),
       valorInvestido: monthlyInvestments,
-      ganhoCapital: Math.max(0, totalValueAtMonth - valorTotalAportado)
+      ganhoCapital: ganhoCapitalDoMes
     });
   }
 
@@ -421,31 +434,58 @@ const Investimentos = () => {
             <CardTitle>Composição da Carteira</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="h-80">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={chartDataByType}
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={100}
-                    fill="#8884d8"
-                    dataKey="valor"
-                    label={({ tipo, valor }) => `${tipo}: ${formatCurrency(valor)}`}
-                  >
-                    {chartDataByType.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip 
-                    formatter={(value: number, name, props) => [
-                      formatCurrency(value),
-                      name,
-                      `${props.payload.indicadorAtrelado ? `(${props.payload.indicadorAtrelado})` : ''}`
-                    ]}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="lg:col-span-2">
+                <div className="h-80">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={chartDataByType}
+                        cx="50%"
+                        cy="50%"
+                        outerRadius={100}
+                        fill="#8884d8"
+                        dataKey="valor"
+                      >
+                        {chartDataByType.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip 
+                        formatter={(value: number, name, props) => [
+                          formatCurrency(value),
+                          name,
+                          `${props.payload.indicadorAtrelado ? `(${props.payload.indicadorAtrelado})` : ''}`
+                        ]}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+              
+              {/* Legend */}
+              <div className="space-y-2">
+                <h4 className="font-semibold text-lg">Tipos de Investimento</h4>
+                <div className="space-y-2 max-h-80 overflow-y-auto">
+                  {chartDataByType.map((item, index) => (
+                    <div 
+                      key={item.tipo}
+                      className="flex items-center gap-3 p-2 rounded-lg border hover:bg-muted/50 transition-colors"
+                    >
+                      <div 
+                        className="w-4 h-4 rounded-full flex-shrink-0"
+                        style={{ backgroundColor: COLORS[index % COLORS.length] }}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm truncate">{item.tipo}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {formatCurrency(item.valor)} ({((item.valor / valorTotalAtualizado) * 100).toFixed(1)}%)
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           </CardContent>
         </Card>
