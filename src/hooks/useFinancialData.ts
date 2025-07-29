@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import type { Category, Subcategory, Account, Transaction, BudgetItem, Debt } from '@/types/financial';
+import type { Category, Subcategory, Account, Transaction, BudgetItem, Debt, Investment } from '@/types/financial';
 
 const DEFAULT_CATEGORIES: Category[] = [
   {
@@ -84,6 +84,16 @@ const DEFAULT_CATEGORIES: Category[] = [
     ]
   },
   {
+    id: 'transferencias',
+    name: 'Transferências',
+    type: 'despesa',
+    subcategories: [
+      { id: 'investimentos', name: 'Investimentos', categoryId: 'transferencias' },
+      { id: 'poupanca', name: 'Poupança', categoryId: 'transferencias' },
+      { id: 'outras-contas', name: 'Outras Contas', categoryId: 'transferencias' }
+    ]
+  },
+  {
     id: 'outros-despesa',
     name: 'Outros',
     type: 'despesa',
@@ -106,12 +116,13 @@ const DEFAULT_CATEGORIES: Category[] = [
     subcategories: []
   },
   {
-    id: 'investimentos',
-    name: 'Investimentos',
+    id: 'variavel',
+    name: 'Variável',
     type: 'receita',
     subcategories: [
-      { id: 'dividendos', name: 'Dividendos', categoryId: 'investimentos' },
-      { id: 'juros', name: 'Juros', categoryId: 'investimentos' }
+      { id: 'investimentos', name: 'Investimentos', categoryId: 'variavel' },
+      { id: 'dividendos', name: 'Dividendos', categoryId: 'variavel' },
+      { id: 'juros', name: 'Juros', categoryId: 'variavel' }
     ]
   },
   {
@@ -152,6 +163,11 @@ export const useFinancialData = () => {
     return stored ? JSON.parse(stored) : [];
   });
 
+  const [investments, setInvestments] = useState<Investment[]>(() => {
+    const stored = localStorage.getItem('financial-investments');
+    return stored ? JSON.parse(stored) : [];
+  });
+
   useEffect(() => {
     localStorage.setItem('financial-categories', JSON.stringify(categories));
   }, [categories]);
@@ -171,6 +187,10 @@ export const useFinancialData = () => {
   useEffect(() => {
     localStorage.setItem('financial-dividas', JSON.stringify(debts));
   }, [debts]);
+
+  useEffect(() => {
+    localStorage.setItem('financial-investments', JSON.stringify(investments));
+  }, [investments]);
 
   const addCategory = (category: Omit<Category, 'id'>) => {
     const newCategory: Category = {
@@ -342,12 +362,31 @@ export const useFinancialData = () => {
     aplicarCapitalizacaoEAtualizarStatus();
   }, [transactions]); // Run when transactions change
 
+  const addInvestment = (investment: Omit<Investment, 'id'>) => {
+    const newInvestment: Investment = {
+      ...investment,
+      id: `investment-${Date.now()}`
+    };
+    setInvestments(prev => [...prev, newInvestment]);
+  };
+
+  const updateInvestment = (investmentId: string, updates: Partial<Investment>) => {
+    setInvestments(prev => prev.map(investment => 
+      investment.id === investmentId ? { ...investment, ...updates } : investment
+    ));
+  };
+
+  const deleteInvestment = (investmentId: string) => {
+    setInvestments(prev => prev.filter(investment => investment.id !== investmentId));
+  };
+
   return {
     categories,
     accounts,
     transactions,
     budgetItems,
     debts,
+    investments,
     addCategory,
     updateCategory,
     deleteCategory,
@@ -361,6 +400,9 @@ export const useFinancialData = () => {
     updateBudgetItem,
     deleteBudgetItem,
     processarPagamentoDivida,
-    aplicarCapitalizacaoEAtualizarStatus
+    aplicarCapitalizacaoEAtualizarStatus,
+    addInvestment,
+    updateInvestment,
+    deleteInvestment
   };
 };

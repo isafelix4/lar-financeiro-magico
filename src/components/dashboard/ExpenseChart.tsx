@@ -25,7 +25,8 @@ const CATEGORY_COLORS: Record<string, string> = {
   'Lazer': 'hsl(var(--chart-3))',
   'Casa': 'hsl(var(--chart-4))',
   'Saúde': 'hsl(var(--chart-5))',
-  'Dívidas': 'hsl(0, 84%, 60%)',
+  'Dívidas': 'hsl(0, 84%, 60%)', // Cor fixa vermelha para dívidas
+  'Transferências': 'hsl(25, 80%, 55%)',
   'Vestuário': 'hsl(280, 65%, 55%)',
   'Educação': 'hsl(160, 70%, 45%)',
   'Outros': 'hsl(220, 70%, 50%)',
@@ -37,18 +38,36 @@ const DEFAULT_COLORS = [
   'hsl(var(--chart-3))',
   'hsl(var(--chart-4))',
   'hsl(var(--chart-5))',
-  'hsl(0, 84%, 60%)',
   'hsl(280, 65%, 55%)',
   'hsl(340, 75%, 60%)',
   'hsl(25, 80%, 55%)',
   'hsl(190, 75%, 50%)',
   'hsl(160, 70%, 45%)',
-  'hsl(60, 80%, 50%)'
+  'hsl(60, 80%, 50%)',
+  'hsl(120, 60%, 45%)'
 ];
 
-// Generate consistent colors for categories
+// Cores reservadas que não devem ser usadas por outras categorias
+const RESERVED_COLORS = ['hsl(0, 84%, 60%)']; // Vermelho reservado para Dívidas
+
+// Generate consistent colors for categories, avoiding reserved colors
 const getCategoryColor = (category: string, index: number) => {
-  return CATEGORY_COLORS[category] || DEFAULT_COLORS[index % DEFAULT_COLORS.length];
+  // Se a categoria tem cor fixa definida, usar sempre a mesma
+  if (CATEGORY_COLORS[category]) {
+    return CATEGORY_COLORS[category];
+  }
+  
+  // Para outras categorias, usar cores que não sejam reservadas
+  let color = DEFAULT_COLORS[index % DEFAULT_COLORS.length];
+  let colorIndex = index;
+  
+  // Evitar cores reservadas para outras categorias
+  while (RESERVED_COLORS.includes(color) && colorIndex < DEFAULT_COLORS.length * 2) {
+    colorIndex++;
+    color = DEFAULT_COLORS[colorIndex % DEFAULT_COLORS.length];
+  }
+  
+  return color;
 };
 
 // Generate colors for all categories consistently

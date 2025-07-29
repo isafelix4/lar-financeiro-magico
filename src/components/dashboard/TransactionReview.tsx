@@ -20,6 +20,7 @@ interface DebtItem {
 
 interface ExtendedPendingTransaction extends PendingTransaction {
   linkedDebtId?: string;
+  linkedInvestmentId?: string;
 }
 
 interface TransactionReviewProps {
@@ -39,7 +40,7 @@ export const TransactionReview = ({
   onApprove, 
   onCancel 
 }: TransactionReviewProps) => {
-  const { categories } = useFinancialData();
+  const { categories, investments } = useFinancialData();
   const { toast } = useToast();
   
   const [reviewedTransactions, setReviewedTransactions] = useState<ExtendedPendingTransaction[]>(
@@ -138,6 +139,33 @@ export const TransactionReview = ({
       return;
     }
 
+    // Validate investment transactions have linked investment
+    const investmentContributions = reviewedTransactions.filter(pt => 
+      pt.suggestedCategory === 'Transferências' && pt.suggestedSubcategory === 'Investimentos' && pt.suggestedType === 'despesa'
+    );
+    const invalidInvestmentContributions = investmentContributions.filter(pt => !pt.linkedInvestmentId);
+    if (invalidInvestmentContributions.length > 0) {
+      toast({
+        title: "Erro de validação",
+        description: "Todas as transferências para investimentos devem ser vinculadas a um investimento específico.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const investmentWithdrawals = reviewedTransactions.filter(pt => 
+      pt.suggestedCategory === 'Variável' && pt.suggestedSubcategory === 'Investimentos' && pt.suggestedType === 'receita'
+    );
+    const invalidInvestmentWithdrawals = investmentWithdrawals.filter(pt => !pt.linkedInvestmentId);
+    if (invalidInvestmentWithdrawals.length > 0) {
+      toast({
+        title: "Erro de validação",
+        description: "Todos os resgates de investimentos devem ser vinculados a um investimento específico.",
+        variant: "destructive"
+      });
+      return;
+    }
+
     const finalTransactions: Transaction[] = reviewedTransactions.map(pt => ({
       id: `transaction-${Date.now()}-${Math.random()}`,
       date: pt.date,
@@ -155,6 +183,19 @@ export const TransactionReview = ({
     debtTransactions.forEach(pt => {
       if (pt.linkedDebtId) {
         updateDebt(pt.linkedDebtId, Math.abs(pt.amount));
+      }
+    });
+
+    // Update linked investments
+    investmentContributions.forEach(pt => {
+      if (pt.linkedInvestmentId) {
+        updateInvestmentContribution(pt.linkedInvestmentId, Math.abs(pt.amount));
+      }
+    });
+
+    investmentWithdrawals.forEach(pt => {
+      if (pt.linkedInvestmentId) {
+        updateInvestmentWithdrawal(pt.linkedInvestmentId, Math.abs(pt.amount));
       }
     });
 
@@ -187,6 +228,55 @@ export const TransactionReview = ({
       // Disparar evento para atualizar a página de dívidas
       window.dispatchEvent(new CustomEvent('debt-payment', { 
         detail: { debtId, paymentAmount } 
+      }));
+    }
+  };
+
+  const updateInvestmentContribution = (investmentId: string, amount: number) => {
+    // Update investments in localStorage
+    const storedInvestments = localStorage.getItem('financial-investments');
+    if (storedInvestments) {
+      const investmentsData = JSON.parse(storedInvestments);
+      const updatedInvestments = investmentsData.map((inv: any) => {
+        if (inv.id === investmentId) {
+          return {
+            ...inv,
+            valorAportado: inv.valorAportado + amount,
+            valorAtualizado: inv.valorAtualizado + amount
+          };
+        }
+        return inv;
+      });
+      
+      localStorage.setItem('financial-investments', JSON.stringify(updatedInvestments));
+      
+      // Trigger event to update investments page
+      window.dispatchEvent(new CustomEvent('investment-update', { 
+        detail: { investmentId, amount, type: 'contribution' } 
+      }));
+    }
+  };
+
+  const updateInvestmentWithdrawal = (investmentId: string, amount: number) => {
+    // Update investments in localStorage
+    const storedInvestments = localStorage.getItem('financial-investments');
+    if (storedInvestments) {
+      const investmentsData = JSON.parse(storedInvestments);
+      const updatedInvestments = investmentsData.map((inv: any) => {
+        if (inv.id === investmentId) {
+          return {
+            ...inv,
+            valorAtualizado: Math.max(0, inv.valorAtualizado - amount)
+          };
+        }
+        return inv;
+      });
+      
+      localStorage.setItem('financial-investments', JSON.stringify(updatedInvestments));
+      
+      // Trigger event to update investments page
+      window.dispatchEvent(new CustomEvent('investment-update', { 
+        detail: { investmentId, amount, type: 'withdrawal' } 
       }));
     }
   };
@@ -462,6 +552,64 @@ export const TransactionReview = ({
                               {debt.name} (Restam {debt.remainingInstallments} parcelas)
                             </SelectItem>
                           ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                {/* Investment contribution linking field */}
+                {transaction.suggestedCategory === 'Transferências' && 
+                 transaction.suggestedSubcategory === 'Investimentos' && 
+                 transaction.suggestedType === 'despesa' && (
+                  <div className="mt-4">
+                    <label className="text-sm font-medium text-foreground mb-2 block">
+                      Vincular Aporte ao Investimento *
+                    </label>
+                    <Select
+                      value={(transaction as ExtendedPendingTransaction).linkedInvestmentId || ''}
+                      onValueChange={(value) => 
+                        updateTransaction(index, 'linkedInvestmentId', value)
+                      }
+                      required
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione o investimento" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {investments.map(investment => (
+                          <SelectItem key={investment.id} value={investment.id}>
+                            {investment.nome} ({investment.tipoInvestimento})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                {/* Investment withdrawal linking field */}
+                {transaction.suggestedCategory === 'Variável' && 
+                 transaction.suggestedSubcategory === 'Investimentos' && 
+                 transaction.suggestedType === 'receita' && (
+                  <div className="mt-4">
+                    <label className="text-sm font-medium text-foreground mb-2 block">
+                      Vincular Resgate ao Investimento *
+                    </label>
+                    <Select
+                      value={(transaction as ExtendedPendingTransaction).linkedInvestmentId || ''}
+                      onValueChange={(value) => 
+                        updateTransaction(index, 'linkedInvestmentId', value)
+                      }
+                      required
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione o investimento" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {investments.map(investment => (
+                          <SelectItem key={investment.id} value={investment.id}>
+                            {investment.nome} ({investment.tipoInvestimento})
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>

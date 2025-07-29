@@ -9,7 +9,8 @@ import {
   TrendingUp,
   Settings,
   Menu,
-  X
+  X,
+  PieChart
 } from "lucide-react";
 import { useState } from "react";
 
@@ -34,6 +35,12 @@ const MainLayout = ({ children }: MainLayoutProps) => {
       href: "/dividas", 
       icon: CreditCard,
       description: "Controle e estratégia de pagamento de dívidas"
+    },
+    {
+      name: "Investimentos",
+      href: "/investimentos",
+      icon: PieChart,
+      description: "Gestão de carteira e acompanhamento de rentabilidade"
     },
     {
       name: "Planejamento",

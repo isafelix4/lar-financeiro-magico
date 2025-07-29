@@ -62,3 +62,16 @@ export interface Debt {
   status: 'Em dia' | 'Em atraso' | 'Suspensa';
   ultimoPagamento?: string;
 }
+
+export interface Investment {
+  id: string;
+  nome: string;
+  tipoInvestimento: string;
+  valorAportado: number;
+  valorAtualizado: number;
+  rentabilidadeMensal: number;
+  indicadorAtrelado?: string;
+  corretora: string;
+  dataPrimeiroAporte: string;
+  rentabilidadeHistorica?: { mes: number; ano: number; taxa: number }[];
+}
