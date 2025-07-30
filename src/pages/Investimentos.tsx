@@ -11,7 +11,10 @@ import { Plus, Pencil, Trash2, ArrowUpDown } from "lucide-react";
 import { toast } from "sonner";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ComposedChart, Line, LineChart } from 'recharts';
+import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
+import InvestmentFilters from "@/components/dashboard/InvestmentFilters";
+import InvestmentReturnUpdater from "@/components/dashboard/InvestmentReturnUpdater";
+import { generateDistinctiveColors } from "@/lib/colorUtils";
 
 const INVESTMENT_TYPES = [
   'Renda Fixa (CDB, Tesouro Direto)',
@@ -24,22 +27,16 @@ const INVESTMENT_TYPES = [
   'Outros'
 ];
 
-const COLORS = [
-  'hsl(var(--chart-1))',
-  'hsl(var(--chart-2))', 
-  'hsl(var(--chart-3))',
-  'hsl(var(--chart-4))',
-  'hsl(var(--chart-5))',
-  'hsl(280, 65%, 55%)',
-  'hsl(340, 75%, 60%)',
-  'hsl(25, 80%, 55%)',
-];
 
 const Investimentos = () => {
-  const { investments, addInvestment, updateInvestment, deleteInvestment, transactions } = useFinancialData();
+  const { investments, addInvestment, updateInvestment, deleteInvestment, updateInvestmentReturn, transactions } = useFinancialData();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingInvestment, setEditingInvestment] = useState<Investment | null>(null);
   const [sortConfig, setSortConfig] = useState<{ key: keyof Investment; direction: 'asc' | 'desc' } | null>(null);
+  
+  // Filtros de período
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   
   const [formData, setFormData] = useState({
     nome: '',
@@ -52,45 +49,56 @@ const Investimentos = () => {
     dataPrimeiroAporte: ''
   });
 
-  const currentMonth = new Date().getMonth() + 1;
-  const currentYear = new Date().getFullYear();
-
-  // Calculate KPIs
+  // Calculate KPIs based on selected filters
   const valorTotalAtualizado = investments.reduce((sum, inv) => sum + inv.valorAtualizado, 0);
   const valorTotalAportado = investments.reduce((sum, inv) => sum + inv.valorAportado, 0);
   const rentabilidadeMedia = investments.length > 0 
     ? investments.reduce((sum, inv) => sum + (inv.rentabilidadeMensal * (inv.valorAportado / valorTotalAportado)), 0)
     : 0;
 
-  // Calculate monthly investment contributions from transactions
+  // Calculate monthly investment contributions from transactions (filtered)
   const aporteDoMes = transactions
     .filter(t => 
       t.category === 'Transferências' && 
       t.subcategory === 'Investimentos' &&
-      t.month === currentMonth && 
-      t.year === currentYear &&
+      t.month === selectedMonth && 
+      t.year === selectedYear &&
       t.type === 'despesa'
     )
     .reduce((sum, t) => sum + t.amount, 0);
 
-  // Prepare chart data
+  // Prepare chart data by type with indicators
   const chartDataByType = investments.reduce((acc, inv) => {
     const existingType = acc.find(item => item.tipo === inv.tipoInvestimento);
     if (existingType) {
       existingType.valor += inv.valorAtualizado;
       existingType.aporte += inv.valorAportado;
+      existingType.indicadores[inv.indicadorAtrelado || 'Sem indicador'] = 
+        (existingType.indicadores[inv.indicadorAtrelado || 'Sem indicador'] || 0) + inv.valorAtualizado;
     } else {
       acc.push({
         tipo: inv.tipoInvestimento,
         valor: inv.valorAtualizado,
         aporte: inv.valorAportado,
-        ganho: inv.valorAtualizado - inv.valorAportado
+        ganho: inv.valorAtualizado - inv.valorAportado,
+        indicadores: {
+          [inv.indicadorAtrelado || 'Sem indicador']: inv.valorAtualizado
+        }
       });
     }
     return acc;
-  }, [] as Array<{ tipo: string; valor: number; aporte: number; ganho: number }>);
+  }, [] as Array<{ 
+    tipo: string; 
+    valor: number; 
+    aporte: number; 
+    ganho: number;
+    indicadores: Record<string, number>;
+  }>);
 
-  // Monthly evolution data - 12 months like debt chart
+  // Generate distinctive colors for chart
+  const COLORS = generateDistinctiveColors(chartDataByType.length);
+
+  // Monthly evolution data - 12 months with grouped/stacked bars
   const monthlyEvolution = [];
   for (let i = 11; i >= 0; i--) {
     const date = new Date();
@@ -98,7 +106,8 @@ const Investimentos = () => {
     const month = date.getMonth() + 1;
     const year = date.getFullYear();
     
-    const monthlyInvestments = transactions
+    // Aportes do mês
+    const aportesMes = transactions
       .filter(t => 
         t.category === 'Transferências' && 
         t.subcategory === 'Investimentos' &&
@@ -108,7 +117,7 @@ const Investimentos = () => {
       )
       .reduce((sum, t) => sum + t.amount, 0);
 
-    // Calculate capital gains for that specific month
+    // Calcular valor total atualizado até o período
     const totalAportadoAteOPeríodo = investments.reduce((sum, inv) => {
       const investmentStartDate = new Date(inv.dataPrimeiroAporte);
       const periodDate = new Date(year, month - 1, 1);
@@ -124,17 +133,23 @@ const Investimentos = () => {
       const periodDate = new Date(year, month - 1, 1);
       
       if (investmentStartDate <= periodDate) {
+        // Aplicar rentabilidade histórica se disponível
+        const historico = inv.rentabilidadeHistorica?.find(h => h.mes === month && h.ano === year);
+        if (historico) {
+          return sum + (inv.valorAportado * (1 + historico.taxa / 100));
+        }
         return sum + inv.valorAtualizado;
       }
       return sum;
     }, 0);
 
-    const ganhoCapitalDoMes = Math.max(0, totalAtualizadoAteOPeríodo - totalAportadoAteOPeríodo);
+    const ganhoCapitalTotal = Math.max(0, totalAtualizadoAteOPeríodo - totalAportadoAteOPeríodo);
 
     monthlyEvolution.push({
       mes: date.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' }),
-      valorInvestido: monthlyInvestments,
-      ganhoCapital: ganhoCapitalDoMes
+      valorTotalAtualizado: totalAtualizadoAteOPeríodo,
+      ganhoCapital: ganhoCapitalTotal,
+      aportesMes
     });
   }
 
@@ -367,8 +382,16 @@ const Investimentos = () => {
         </Dialog>
       </div>
 
+      {/* Filters */}
+      <InvestmentFilters
+        selectedMonth={selectedMonth}
+        selectedYear={selectedYear}
+        onMonthChange={setSelectedMonth}
+        onYearChange={setSelectedYear}
+      />
+
       {/* KPIs */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Valor Total Atualizado</CardTitle>
@@ -398,8 +421,22 @@ const Investimentos = () => {
           <CardContent>
             <div className="text-2xl font-bold">{formatCurrency(aporteDoMes)}</div>
             <p className="text-xs text-muted-foreground">
-              {currentMonth.toString().padStart(2, '0')}/{currentYear}
+              {selectedMonth.toString().padStart(2, '0')}/{selectedYear}
             </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Controle</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <InvestmentReturnUpdater
+              investments={investments}
+              onUpdateReturn={updateInvestmentReturn}
+              selectedMonth={selectedMonth}
+              selectedYear={selectedYear}
+            />
           </CardContent>
         </Card>
       </div>
@@ -409,20 +446,20 @@ const Investimentos = () => {
         {/* Evolution Chart */}
         <Card>
           <CardHeader>
-            <CardTitle>Evolução dos Investimentos</CardTitle>
+            <CardTitle>Evolução Mensal dos Investimentos</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="h-80">
               <ResponsiveContainer width="100%" height="100%">
-                <ComposedChart data={monthlyEvolution}>
+                <BarChart data={monthlyEvolution}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="mes" />
                   <YAxis tickFormatter={(value) => formatCurrency(value)} />
                   <Tooltip formatter={(value: number) => formatCurrency(value)} />
                   <Legend />
-                  <Bar dataKey="valorInvestido" fill="hsl(var(--chart-1))" name="Valor Investido" />
-                  <Bar dataKey="ganhoCapital" fill="hsl(var(--chart-2))" name="Ganho de Capital" />
-                </ComposedChart>
+                  <Bar dataKey="valorTotalAtualizado" fill="hsl(var(--chart-1))" name="Valor Total Atualizado" />
+                  <Bar dataKey="ganhoCapital" fill="hsl(var(--chart-2))" name="Ganho de Capital Total" />
+                </BarChart>
               </ResponsiveContainer>
             </div>
           </CardContent>
@@ -452,11 +489,26 @@ const Investimentos = () => {
                         ))}
                       </Pie>
                       <Tooltip 
-                        formatter={(value: number, name, props) => [
-                          formatCurrency(value),
-                          name,
-                          `${props.payload.indicadorAtrelado ? `(${props.payload.indicadorAtrelado})` : ''}`
-                        ]}
+                        formatter={(value: number, name, props) => {
+                          const entry = props.payload;
+                          if (!entry) return [formatCurrency(value), name];
+                          
+                          const indicadores = entry.indicadores || {};
+                          const total = entry.valor || 0;
+                          
+                          const lines = [
+                            `Total: ${formatCurrency(total)}`
+                          ];
+                          
+                          // Add indicator breakdown
+                          Object.entries(indicadores).forEach(([indicator, amount]) => {
+                            const percentage = total > 0 ? ((amount as number / total) * 100).toFixed(1) : 0;
+                            lines.push(`${indicator}: ${formatCurrency(amount as number)} (${percentage}%)`);
+                          });
+                          
+                          return lines;
+                        }}
+                        labelFormatter={(value) => `Tipo: ${value}`}
                       />
                     </PieChart>
                   </ResponsiveContainer>
@@ -466,25 +518,32 @@ const Investimentos = () => {
               {/* Legend */}
               <div className="space-y-2">
                 <h4 className="font-semibold text-lg">Tipos de Investimento</h4>
-                <div className="space-y-2 max-h-80 overflow-y-auto">
-                  {chartDataByType.map((item, index) => (
-                    <div 
-                      key={item.tipo}
-                      className="flex items-center gap-3 p-2 rounded-lg border hover:bg-muted/50 transition-colors"
-                    >
+                  <div className="space-y-2 max-h-80 overflow-y-auto">
+                    {chartDataByType.map((item, index) => (
                       <div 
-                        className="w-4 h-4 rounded-full flex-shrink-0"
-                        style={{ backgroundColor: COLORS[index % COLORS.length] }}
-                      />
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-sm truncate">{item.tipo}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {formatCurrency(item.valor)} ({((item.valor / valorTotalAtualizado) * 100).toFixed(1)}%)
-                        </p>
+                        key={item.tipo}
+                        className="flex items-center gap-3 p-2 rounded-lg border hover:bg-muted/50 transition-colors"
+                      >
+                        <div 
+                          className="w-4 h-4 rounded-full flex-shrink-0"
+                          style={{ backgroundColor: COLORS[index % COLORS.length] }}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-sm truncate">{item.tipo}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {formatCurrency(item.valor)} ({((item.valor / valorTotalAtualizado) * 100).toFixed(1)}%)
+                          </p>
+                          <div className="mt-1 space-y-1">
+                            {Object.entries(item.indicadores).map(([indicator, amount]) => (
+                              <p key={indicator} className="text-xs text-muted-foreground ml-2">
+                                • {indicator}: {formatCurrency(amount as number)}
+                              </p>
+                            ))}
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
               </div>
             </div>
           </CardContent>

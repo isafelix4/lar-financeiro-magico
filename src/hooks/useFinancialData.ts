@@ -365,8 +365,40 @@ export const useFinancialData = () => {
   const addInvestment = (investment: Omit<Investment, 'id'>) => {
     const newInvestment: Investment = {
       ...investment,
-      id: `investment-${Date.now()}`
+      id: `investment-${Date.now()}`,
+      rentabilidadeHistorica: []
     };
+
+    // Cálculo retroativo se valor atualizado > valor aportado
+    if (investment.valorAtualizado > investment.valorAportado) {
+      const ganhoTotal = investment.valorAtualizado - investment.valorAportado;
+      const dataInicio = new Date(investment.dataPrimeiroAporte);
+      const dataAtual = new Date();
+      
+      const mesesDecorridos = (dataAtual.getFullYear() - dataInicio.getFullYear()) * 12 + 
+                             (dataAtual.getMonth() - dataInicio.getMonth());
+      
+      if (mesesDecorridos > 0) {
+        const ganhoMensal = ganhoTotal / mesesDecorridos;
+        const rentabilidadeHistorica = [];
+        
+        for (let i = 0; i <= mesesDecorridos; i++) {
+          const dataCalculo = new Date(dataInicio);
+          dataCalculo.setMonth(dataCalculo.getMonth() + i);
+          
+          const rentabilidadeMensal = (ganhoMensal / investment.valorAportado) * 100;
+          
+          rentabilidadeHistorica.push({
+            mes: dataCalculo.getMonth() + 1,
+            ano: dataCalculo.getFullYear(),
+            taxa: rentabilidadeMensal
+          });
+        }
+        
+        newInvestment.rentabilidadeHistorica = rentabilidadeHistorica;
+      }
+    }
+    
     setInvestments(prev => [...prev, newInvestment]);
   };
 
@@ -378,6 +410,33 @@ export const useFinancialData = () => {
 
   const deleteInvestment = (investmentId: string) => {
     setInvestments(prev => prev.filter(investment => investment.id !== investmentId));
+  };
+
+  const updateInvestmentReturn = (investmentId: string, newReturn: number, month: number, year: number) => {
+    setInvestments(prev => prev.map(investment => {
+      if (investment.id !== investmentId) return investment;
+      
+      const historico = investment.rentabilidadeHistorica || [];
+      const existingIndex = historico.findIndex(h => h.mes === month && h.ano === year);
+      
+      let novaRentabilidadeHistorica;
+      if (existingIndex >= 0) {
+        novaRentabilidadeHistorica = [...historico];
+        novaRentabilidadeHistorica[existingIndex] = { mes: month, ano: year, taxa: newReturn };
+      } else {
+        novaRentabilidadeHistorica = [...historico, { mes: month, ano: year, taxa: newReturn }];
+      }
+      
+      // Recalcular valor atualizado baseado na nova rentabilidade
+      const valorAtualizado = investment.valorAportado * (1 + (newReturn / 100));
+      
+      return {
+        ...investment,
+        valorAtualizado,
+        rentabilidadeMensal: newReturn,
+        rentabilidadeHistorica: novaRentabilidadeHistorica
+      };
+    }));
   };
 
   return {
@@ -403,6 +462,7 @@ export const useFinancialData = () => {
     aplicarCapitalizacaoEAtualizarStatus,
     addInvestment,
     updateInvestment,
-    deleteInvestment
+    deleteInvestment,
+    updateInvestmentReturn
   };
 };
