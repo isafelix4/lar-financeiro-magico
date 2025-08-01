@@ -21,7 +21,7 @@ export const TransactionEditDialog = ({
   onClose, 
   onUpdate 
 }: TransactionEditDialogProps) => {
-  const { categories } = useFinancialData();
+  const { categories, debts, processarPagamentoDivida } = useFinancialData();
   const { toast } = useToast();
   
   const [formData, setFormData] = useState({
@@ -30,6 +30,9 @@ export const TransactionEditDialog = ({
     subcategory: "",
     type: "despesa" as 'receita' | 'despesa'
   });
+  
+  const [showDebtDialog, setShowDebtDialog] = useState(false);
+  const [selectedDebt, setSelectedDebt] = useState("");
 
   useEffect(() => {
     if (transaction) {
@@ -60,12 +63,46 @@ export const TransactionEditDialog = ({
       type: formData.type
     };
 
+    // Check if category changed to "Dívidas" and wasn't before
+    if (formData.category === 'Dívidas' && transaction.category !== 'Dívidas') {
+      setShowDebtDialog(true);
+      return;
+    }
+
     onUpdate(updatedTransaction);
     onClose();
     
     toast({
       title: "Lançamento atualizado!",
       description: "As alterações foram salvas com sucesso."
+    });
+  };
+
+  const handleDebtLinking = () => {
+    if (!selectedDebt || !transaction) return;
+
+    const debt = debts.find(d => d.id === selectedDebt);
+    if (!debt) return;
+
+    // Process debt payment
+    processarPagamentoDivida(selectedDebt, parseFloat(formData.amount));
+
+    const updatedTransaction: Transaction = {
+      ...transaction,
+      amount: parseFloat(formData.amount),
+      category: formData.category,
+      subcategory: formData.subcategory || undefined,
+      type: formData.type
+    };
+
+    onUpdate(updatedTransaction);
+    setShowDebtDialog(false);
+    setSelectedDebt("");
+    onClose();
+    
+    toast({
+      title: "Lançamento atualizado e dívida vinculada!",
+      description: "O pagamento foi contabilizado na dívida selecionada."
     });
   };
 
@@ -180,6 +217,55 @@ export const TransactionEditDialog = ({
             </Button>
           </div>
         </form>
+
+        {/* Debt Linking Dialog */}
+        {showDebtDialog && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-background border rounded-lg p-6 max-w-md w-full m-4">
+              <h3 className="text-lg font-semibold mb-4">Vincular à Dívida</h3>
+              <p className="text-sm text-muted-foreground mb-4">
+                Este lançamento foi categorizado como "Dívidas". Selecione a dívida correspondente:
+              </p>
+              
+              <div className="space-y-4">
+                <div>
+                  <Label>Dívida</Label>
+                  <Select value={selectedDebt} onValueChange={setSelectedDebt}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione a dívida" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {debts.map(debt => (
+                        <SelectItem key={debt.id} value={debt.id}>
+                          {debt.credor} - {debt.descricao}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div className="flex justify-end gap-2">
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    onClick={() => {
+                      setShowDebtDialog(false);
+                      setSelectedDebt("");
+                    }}
+                  >
+                    Cancelar
+                  </Button>
+                  <Button 
+                    onClick={handleDebtLinking}
+                    disabled={!selectedDebt}
+                  >
+                    Vincular e Salvar
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );

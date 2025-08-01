@@ -52,15 +52,27 @@ const Investimentos = () => {
   // Calculate KPIs based on selected filters (snapshot logic)
   const getSnapshotForPeriod = (month: number, year: number) => {
     return investments.reduce((acc, inv) => {
+      const dataInicio = new Date(inv.dataPrimeiroAporte);
+      const targetDate = new Date(year, month - 1);
+      
+      // Only include investment if target date is >= first investment date
+      if (targetDate < dataInicio) {
+        return acc;
+      }
+      
       const snapshot = inv.snapshotsmensais?.find(s => s.mes === month && s.ano === year);
       if (snapshot) {
         acc.valorTotalAtualizado += snapshot.valorTotalAtualizado;
         acc.valorTotalInvestido += snapshot.valorTotalInvestido;
         acc.ganhoCapitalTotal += snapshot.ganhoCapitalMes;
       } else {
-        // Se não há snapshot, usar valores base
-        acc.valorTotalAtualizado += inv.valorAtualizado;
-        acc.valorTotalInvestido += inv.valorAportado;
+        // If no snapshot but investment should exist, use base values only if it's the first month
+        if (targetDate.getFullYear() === dataInicio.getFullYear() && 
+            targetDate.getMonth() === dataInicio.getMonth()) {
+          acc.valorTotalAtualizado += inv.valorAportado;
+          acc.valorTotalInvestido += inv.valorAportado;
+          acc.ganhoCapitalTotal += 0;
+        }
       }
       return acc;
     }, { valorTotalAtualizado: 0, valorTotalInvestido: 0, ganhoCapitalTotal: 0 });
@@ -116,13 +128,24 @@ const Investimentos = () => {
   // Generate distinctive colors for chart
   const COLORS = generateDistinctiveColors(chartDataByType.length);
 
-  // Monthly evolution data using snapshots - 12 months with stacked bars
+  // Monthly evolution data using snapshots - all months since first investment
   const monthlyEvolution = [];
-  for (let i = 11; i >= 0; i--) {
-    const date = new Date();
-    date.setMonth(date.getMonth() - i);
-    const month = date.getMonth() + 1;
-    const year = date.getFullYear();
+  
+  // Find earliest investment date
+  const earliestDate = investments.reduce((earliest, investment) => {
+    const investmentDate = new Date(investment.dataPrimeiroAporte);
+    return earliest && earliest < investmentDate ? earliest : investmentDate;
+  }, null as Date | null);
+  
+  if (earliestDate) {
+    const currentDate = new Date();
+    const startDate = new Date(earliestDate.getFullYear(), earliestDate.getMonth(), 1);
+    
+    let targetDate = new Date(startDate);
+    
+    while (targetDate <= currentDate) {
+      const month = targetDate.getMonth() + 1;
+      const year = targetDate.getFullYear();
     
     // Aportes do mês
     const aportesMes = transactions
@@ -164,13 +187,16 @@ const Investimentos = () => {
     const monthNames = ['jan.', 'fev.', 'mar.', 'abr.', 'mai.', 'jun.', 'jul.', 'ago.', 'set.', 'out.', 'nov.', 'dez.'];
     const formattedDate = `${monthNames[month - 1]} de ${year}`;
 
-    monthlyEvolution.push({
-      mes: formattedDate,
-      valorTotalInvestido: Math.max(0, valorTotalInvestido),
-      ganhoCapitalTotal: Math.max(0, ganhoCapitalMes),
-      aportesMes,
-      resgatesMes
-    });
+      monthlyEvolution.push({
+        mes: formattedDate,
+        valorTotalInvestido: Math.max(0, valorTotalInvestido),
+        ganhoCapitalTotal: Math.max(0, ganhoCapitalMes),
+        aportesMes,
+        resgatesMes
+      });
+      
+      targetDate.setMonth(targetDate.getMonth() + 1);
+    }
   }
 
   const formatCurrency = (value: number) => {
@@ -469,18 +495,26 @@ const Investimentos = () => {
             <CardTitle>Evolução Mensal dos Investimentos</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="h-80">
-              <ResponsiveContainer width="100%" height="100%">
-                 <BarChart data={monthlyEvolution}>
-                   <CartesianGrid strokeDasharray="3 3" />
-                   <XAxis dataKey="mes" />
-                   <YAxis tickFormatter={(value) => formatCurrency(value)} />
-                   <Tooltip formatter={(value: number) => formatCurrency(value)} />
-                   <Legend />
-                   <Bar dataKey="valorTotalInvestido" stackId="a" fill="hsl(var(--chart-1))" name="Valor Total Investido" />
-                   <Bar dataKey="ganhoCapitalTotal" stackId="a" fill="hsl(var(--chart-2))" name="Ganho de Capital Total" />
-                 </BarChart>
-              </ResponsiveContainer>
+            <div className="h-80 overflow-x-auto">
+              <div style={{ minWidth: Math.max(800, monthlyEvolution.length * 80) }}>
+                <ResponsiveContainer width="100%" height="100%">
+                   <BarChart data={monthlyEvolution}>
+                     <CartesianGrid strokeDasharray="3 3" />
+                     <XAxis 
+                       dataKey="mes" 
+                       tick={{ fontSize: 12 }}
+                       angle={-45}
+                       textAnchor="end"
+                       height={70}
+                     />
+                     <YAxis tickFormatter={(value) => formatCurrency(value)} />
+                     <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                     <Legend />
+                     <Bar dataKey="valorTotalInvestido" stackId="a" fill="hsl(var(--chart-1))" name="Valor Total Investido" />
+                     <Bar dataKey="ganhoCapitalTotal" stackId="a" fill="hsl(var(--chart-2))" name="Ganho de Capital Total" />
+                   </BarChart>
+                </ResponsiveContainer>
+              </div>
             </div>
           </CardContent>
         </Card>

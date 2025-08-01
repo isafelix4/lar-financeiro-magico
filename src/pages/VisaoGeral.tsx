@@ -85,15 +85,19 @@ const VisaoGeral = () => {
     .filter(t => t.type === 'receita')
     .reduce((sum, t) => sum + t.amount, 0);
 
+  const investimentos = filteredTransactions
+    .filter(t => t.type === 'despesa' && t.category === 'Transferências' && t.subcategory === 'Investimentos')
+    .reduce((sum, t) => sum + t.amount, 0);
+
   const despesas = filteredTransactions
-    .filter(t => t.type === 'despesa' && t.category !== 'Dívidas')
+    .filter(t => t.type === 'despesa' && t.category !== 'Dívidas' && !(t.category === 'Transferências' && t.subcategory === 'Investimentos'))
     .reduce((sum, t) => sum + t.amount, 0);
 
   const dividas = filteredTransactions
     .filter(t => t.type === 'despesa' && t.category === 'Dívidas')
     .reduce((sum, t) => sum + t.amount, 0);
 
-  const saldoMensal = receitas - despesas - dividas;
+  const saldoMensal = receitas - despesas - dividas - investimentos;
 
   // Preparar dados para o gráfico
   const expensesByCategory = filteredTransactions
@@ -246,6 +250,7 @@ const VisaoGeral = () => {
         receitas={receitas}
         despesas={despesas}
         dividas={dividas}
+        investimentos={investimentos}
         saldoMensal={saldoMensal}
       />
 

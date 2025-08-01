@@ -5,10 +5,11 @@ interface KPICardsProps {
   receitas: number;
   despesas: number;
   dividas: number;
+  investimentos: number;
   saldoMensal: number;
 }
 
-export const KPICards = ({ receitas, despesas, dividas, saldoMensal }: KPICardsProps) => {
+export const KPICards = ({ receitas, despesas, dividas, investimentos, saldoMensal }: KPICardsProps) => {
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
@@ -17,7 +18,7 @@ export const KPICards = ({ receitas, despesas, dividas, saldoMensal }: KPICardsP
   };
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
       <Card className="border-l-4 border-l-success">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle className="text-sm font-medium">Renda Total</CardTitle>
@@ -39,7 +40,7 @@ export const KPICards = ({ receitas, despesas, dividas, saldoMensal }: KPICardsP
         <CardContent>
           <div className="text-2xl font-bold text-warning">{formatCurrency(despesas)}</div>
           <p className="text-xs text-muted-foreground">
-            Gastos exceto dívidas
+            Gastos exceto dívidas e investimentos
           </p>
         </CardContent>
       </Card>
@@ -53,6 +54,19 @@ export const KPICards = ({ receitas, despesas, dividas, saldoMensal }: KPICardsP
           <div className="text-2xl font-bold text-danger">{formatCurrency(dividas)}</div>
           <p className="text-xs text-muted-foreground">
             Pagamentos de dívidas
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card className="border-l-4 border-l-info">
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardTitle className="text-sm font-medium">Valor para Investimentos</CardTitle>
+          <TrendingUp className="h-4 w-4 text-info" />
+        </CardHeader>
+        <CardContent>
+          <div className="text-2xl font-bold text-info">{formatCurrency(investimentos)}</div>
+          <p className="text-xs text-muted-foreground">
+            Aportes em investimentos
           </p>
         </CardContent>
       </Card>

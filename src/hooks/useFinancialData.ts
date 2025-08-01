@@ -238,15 +238,18 @@ export const useFinancialData = () => {
   };
 
   const addAccount = (account: Omit<Account, 'id'>) => {
-    // Verificar se já existe uma conta com esse nome
-    const existingAccount = accounts.find(acc => acc.name.toLowerCase() === account.name.toLowerCase());
+    // Verificar se já existe uma conta com esse nome (case insensitive)
+    const existingAccount = accounts.find(acc => 
+      acc.name.toLowerCase().trim() === account.name.toLowerCase().trim()
+    );
     if (existingAccount) {
       return existingAccount;
     }
 
     const newAccount: Account = {
       ...account,
-      id: `account-${Date.now()}`
+      id: `account-${Date.now()}`,
+      name: account.name.trim() // Remove extra spaces
     };
     setAccounts(prev => [...prev, newAccount]);
     return newAccount;
@@ -255,9 +258,11 @@ export const useFinancialData = () => {
   const addTransactions = (newTransactions: Transaction[]) => {
     // Verificar e adicionar novas contas automaticamente
     newTransactions.forEach(transaction => {
-      const accountExists = accounts.find(acc => acc.name === transaction.account);
+      const accountExists = accounts.find(acc => 
+        acc.name.toLowerCase().trim() === transaction.account.toLowerCase().trim()
+      );
       if (!accountExists) {
-        addAccount({ name: transaction.account });
+        addAccount({ name: transaction.account.trim() });
       }
     });
     
@@ -374,7 +379,8 @@ export const useFinancialData = () => {
     const newInvestment: Investment = {
       ...investment,
       id: `investment-${Date.now()}`,
-      rentabilidadeHistorica: []
+      rentabilidadeHistorica: [],
+      snapshotsmensais: []
     };
 
     // Cálculo retroativo se valor atualizado > valor aportado
@@ -387,24 +393,58 @@ export const useFinancialData = () => {
                              (dataAtual.getMonth() - dataInicio.getMonth());
       
       if (mesesDecorridos > 0) {
-        const ganhoMensal = ganhoTotal / mesesDecorridos;
+        const rentabilidadeMensal = (ganhoTotal / investment.valorAportado) * 100;
         const rentabilidadeHistorica = [];
+        const snapshotsHistoricos = [];
         
-        for (let i = 0; i <= mesesDecorridos; i++) {
+        let valorAcumulado = investment.valorAportado;
+        
+        // Criar snapshot inicial
+        const mesInicial = dataInicio.getMonth() + 1;
+        const anoInicial = dataInicio.getFullYear();
+        snapshotsHistoricos.push({
+          mes: mesInicial,
+          ano: anoInicial,
+          valorTotalInvestido: investment.valorAportado,
+          valorTotalAtualizado: investment.valorAportado,
+          ganhoCapitalMes: 0
+        });
+        
+        for (let i = 1; i <= mesesDecorridos; i++) {
           const dataCalculo = new Date(dataInicio);
           dataCalculo.setMonth(dataCalculo.getMonth() + i);
           
-          const rentabilidadeMensal = (ganhoMensal / investment.valorAportado) * 100;
+          const ganhoMensal = valorAcumulado * (rentabilidadeMensal / 100);
+          valorAcumulado += ganhoMensal;
           
           rentabilidadeHistorica.push({
             mes: dataCalculo.getMonth() + 1,
             ano: dataCalculo.getFullYear(),
             taxa: rentabilidadeMensal
           });
+          
+          snapshotsHistoricos.push({
+            mes: dataCalculo.getMonth() + 1,
+            ano: dataCalculo.getFullYear(),
+            valorTotalInvestido: investment.valorAportado,
+            valorTotalAtualizado: valorAcumulado,
+            ganhoCapitalMes: ganhoMensal
+          });
         }
         
         newInvestment.rentabilidadeHistorica = rentabilidadeHistorica;
+        newInvestment.snapshotsmensais = snapshotsHistoricos;
       }
+    } else {
+      // Create initial snapshot for first month
+      const dataInicio = new Date(investment.dataPrimeiroAporte);
+      newInvestment.snapshotsmensais = [{
+        mes: dataInicio.getMonth() + 1,
+        ano: dataInicio.getFullYear(),
+        valorTotalInvestido: investment.valorAportado,
+        valorTotalAtualizado: investment.valorAportado,
+        ganhoCapitalMes: 0
+      }];
     }
     
     setInvestments(prev => [...prev, newInvestment]);
