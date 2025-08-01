@@ -49,9 +49,27 @@ const Investimentos = () => {
     dataPrimeiroAporte: ''
   });
 
-  // Calculate KPIs based on selected filters
-  const valorTotalAtualizado = investments.reduce((sum, inv) => sum + inv.valorAtualizado, 0);
+  // Calculate KPIs based on selected filters (snapshot logic)
+  const getSnapshotForPeriod = (month: number, year: number) => {
+    return investments.reduce((acc, inv) => {
+      const snapshot = inv.snapshotsmensais?.find(s => s.mes === month && s.ano === year);
+      if (snapshot) {
+        acc.valorTotalAtualizado += snapshot.valorTotalAtualizado;
+        acc.valorTotalInvestido += snapshot.valorTotalInvestido;
+        acc.ganhoCapitalTotal += snapshot.ganhoCapitalMes;
+      } else {
+        // Se não há snapshot, usar valores base
+        acc.valorTotalAtualizado += inv.valorAtualizado;
+        acc.valorTotalInvestido += inv.valorAportado;
+      }
+      return acc;
+    }, { valorTotalAtualizado: 0, valorTotalInvestido: 0, ganhoCapitalTotal: 0 });
+  };
+
+  const snapshotAtual = getSnapshotForPeriod(selectedMonth, selectedYear);
+  const valorTotalAtualizado = snapshotAtual.valorTotalAtualizado;
   const valorTotalAportado = investments.reduce((sum, inv) => sum + inv.valorAportado, 0);
+  
   const rentabilidadeMedia = investments.length > 0 
     ? investments.reduce((sum, inv) => sum + (inv.rentabilidadeMensal * (inv.valorAportado / valorTotalAportado)), 0)
     : 0;
@@ -98,7 +116,7 @@ const Investimentos = () => {
   // Generate distinctive colors for chart
   const COLORS = generateDistinctiveColors(chartDataByType.length);
 
-  // Monthly evolution data - 12 months with grouped/stacked bars
+  // Monthly evolution data using snapshots - 12 months with stacked bars
   const monthlyEvolution = [];
   for (let i = 11; i >= 0; i--) {
     const date = new Date();
@@ -117,39 +135,41 @@ const Investimentos = () => {
       )
       .reduce((sum, t) => sum + t.amount, 0);
 
-    // Calcular valor total atualizado até o período
-    const totalAportadoAteOPeríodo = investments.reduce((sum, inv) => {
-      const investmentStartDate = new Date(inv.dataPrimeiroAporte);
-      const periodDate = new Date(year, month - 1, 1);
-      
-      if (investmentStartDate <= periodDate) {
-        return sum + inv.valorAportado;
-      }
-      return sum;
-    }, 0);
+    // Resgates do mês
+    const resgatesMes = transactions
+      .filter(t => 
+        t.category === 'Variável' && 
+        t.subcategory === 'Investimentos' &&
+        t.month === month && 
+        t.year === year &&
+        t.type === 'receita'
+      )
+      .reduce((sum, t) => sum + t.amount, 0);
 
-    const totalAtualizadoAteOPeríodo = investments.reduce((sum, inv) => {
-      const investmentStartDate = new Date(inv.dataPrimeiroAporte);
-      const periodDate = new Date(year, month - 1, 1);
-      
-      if (investmentStartDate <= periodDate) {
-        // Aplicar rentabilidade histórica se disponível
-        const historico = inv.rentabilidadeHistorica?.find(h => h.mes === month && h.ano === year);
-        if (historico) {
-          return sum + (inv.valorAportado * (1 + historico.taxa / 100));
-        }
-        return sum + inv.valorAtualizado;
-      }
-      return sum;
-    }, 0);
+    // Obter snapshot do mês ou calcular
+    const snapshotMes = getSnapshotForPeriod(month, year);
+    
+    // Valor do mês anterior (para calcular base)
+    const mesAnterior = month === 1 ? 12 : month - 1;
+    const anoAnterior = month === 1 ? year - 1 : year;
+    const snapshotAnterior = getSnapshotForPeriod(mesAnterior, anoAnterior);
+    
+    // Calcular Valor Total Investido conforme fórmula solicitada:
+    // Valor Total Atualizado do mês anterior + Novos Aportes do mês - Resgates realizados no mês
+    const valorTotalInvestido = snapshotAnterior.valorTotalAtualizado + aportesMes - resgatesMes;
+    
+    // Ganho de Capital do mês
+    const ganhoCapitalMes = snapshotMes.valorTotalAtualizado - valorTotalInvestido;
 
-    const ganhoCapitalTotal = Math.max(0, totalAtualizadoAteOPeríodo - totalAportadoAteOPeríodo);
+    const monthNames = ['jan.', 'fev.', 'mar.', 'abr.', 'mai.', 'jun.', 'jul.', 'ago.', 'set.', 'out.', 'nov.', 'dez.'];
+    const formattedDate = `${monthNames[month - 1]} de ${year}`;
 
     monthlyEvolution.push({
-      mes: date.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' }),
-      valorTotalAtualizado: totalAtualizadoAteOPeríodo,
-      ganhoCapital: ganhoCapitalTotal,
-      aportesMes
+      mes: formattedDate,
+      valorTotalInvestido: Math.max(0, valorTotalInvestido),
+      ganhoCapitalTotal: Math.max(0, ganhoCapitalMes),
+      aportesMes,
+      resgatesMes
     });
   }
 
@@ -451,15 +471,15 @@ const Investimentos = () => {
           <CardContent>
             <div className="h-80">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={monthlyEvolution}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="mes" />
-                  <YAxis tickFormatter={(value) => formatCurrency(value)} />
-                  <Tooltip formatter={(value: number) => formatCurrency(value)} />
-                  <Legend />
-                  <Bar dataKey="valorTotalAtualizado" fill="hsl(var(--chart-1))" name="Valor Total Atualizado" />
-                  <Bar dataKey="ganhoCapital" fill="hsl(var(--chart-2))" name="Ganho de Capital Total" />
-                </BarChart>
+                 <BarChart data={monthlyEvolution}>
+                   <CartesianGrid strokeDasharray="3 3" />
+                   <XAxis dataKey="mes" />
+                   <YAxis tickFormatter={(value) => formatCurrency(value)} />
+                   <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                   <Legend />
+                   <Bar dataKey="valorTotalInvestido" stackId="a" fill="hsl(var(--chart-1))" name="Valor Total Investido" />
+                   <Bar dataKey="ganhoCapitalTotal" stackId="a" fill="hsl(var(--chart-2))" name="Ganho de Capital Total" />
+                 </BarChart>
               </ResponsiveContainer>
             </div>
           </CardContent>

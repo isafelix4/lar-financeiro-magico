@@ -253,6 +253,14 @@ export const useFinancialData = () => {
   };
 
   const addTransactions = (newTransactions: Transaction[]) => {
+    // Verificar e adicionar novas contas automaticamente
+    newTransactions.forEach(transaction => {
+      const accountExists = accounts.find(acc => acc.name === transaction.account);
+      if (!accountExists) {
+        addAccount({ name: transaction.account });
+      }
+    });
+    
     setTransactions(prev => [...prev, ...newTransactions]);
   };
 
@@ -417,6 +425,7 @@ export const useFinancialData = () => {
       if (investment.id !== investmentId) return investment;
       
       const historico = investment.rentabilidadeHistorica || [];
+      const snapshots = investment.snapshotsmensais || [];
       const existingIndex = historico.findIndex(h => h.mes === month && h.ano === year);
       
       let novaRentabilidadeHistorica;
@@ -427,14 +436,53 @@ export const useFinancialData = () => {
         novaRentabilidadeHistorica = [...historico, { mes: month, ano: year, taxa: newReturn }];
       }
       
-      // Recalcular valor atualizado baseado na nova rentabilidade
-      const valorAtualizado = investment.valorAportado * (1 + (newReturn / 100));
+      // Calcular valor atualizado usando juros compostos
+      let valorTotalAtualizado = investment.valorAportado;
+      
+      // Ordenar histórico por data para aplicar juros compostos
+      const historicoOrdenado = novaRentabilidadeHistorica.sort((a, b) => {
+        if (a.ano !== b.ano) return a.ano - b.ano;
+        return a.mes - b.mes;
+      });
+      
+      for (const rent of historicoOrdenado) {
+        valorTotalAtualizado = valorTotalAtualizado * (1 + (rent.taxa / 100));
+      }
+      
+      // Atualizar snapshots mensais
+      const snapshotExistingIndex = snapshots.findIndex(s => s.mes === month && s.ano === year);
+      let novosSnapshots = [...snapshots];
+      
+      // Encontrar valor anterior (mês anterior)
+      const mesAnterior = month === 1 ? 12 : month - 1;
+      const anoAnterior = month === 1 ? year - 1 : year;
+      const snapshotAnterior = snapshots.find(s => s.mes === mesAnterior && s.ano === anoAnterior);
+      const valorAnterior = snapshotAnterior?.valorTotalAtualizado || investment.valorAportado;
+      
+      // Calcular ganho do mês baseado no valor anterior
+      const ganhoCapitalMes = valorAnterior * (newReturn / 100);
+      const valorTotalInvestido = valorAnterior; // Sem novos aportes neste exemplo
+      
+      const novoSnapshot = {
+        mes: month,
+        ano: year,
+        valorTotalInvestido,
+        valorTotalAtualizado: valorAnterior + ganhoCapitalMes,
+        ganhoCapitalMes
+      };
+      
+      if (snapshotExistingIndex >= 0) {
+        novosSnapshots[snapshotExistingIndex] = novoSnapshot;
+      } else {
+        novosSnapshots.push(novoSnapshot);
+      }
       
       return {
         ...investment,
-        valorAtualizado,
+        valorAtualizado: valorTotalAtualizado,
         rentabilidadeMensal: newReturn,
-        rentabilidadeHistorica: novaRentabilidadeHistorica
+        rentabilidadeHistorica: novaRentabilidadeHistorica,
+        snapshotsmensais: novosSnapshots
       };
     }));
   };

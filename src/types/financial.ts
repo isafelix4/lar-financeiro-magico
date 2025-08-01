@@ -74,4 +74,11 @@ export interface Investment {
   corretora: string;
   dataPrimeiroAporte: string;
   rentabilidadeHistorica?: { mes: number; ano: number; taxa: number }[];
+  snapshotsmensais?: { 
+    mes: number; 
+    ano: number; 
+    valorTotalInvestido: number; 
+    valorTotalAtualizado: number; 
+    ganhoCapitalMes: number; 
+  }[];
 }
