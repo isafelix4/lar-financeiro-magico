@@ -1,53 +1,53 @@
-import { useState } from 'react';
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Investment } from "@/types/financial";
 import { TrendingUp } from "lucide-react";
 import { toast } from "sonner";
 
 interface InvestmentReturnUpdaterProps {
   investments: Investment[];
-  onUpdateReturn: (investmentId: string, newReturn: number, month: number, year: number) => void;
-  selectedMonth: number;
-  selectedYear: number;
+  onUpdateReturn: (investmentId: string, ganhoMonetario: number, rentabilidadePercentual: number) => void;
 }
 
 const InvestmentReturnUpdater = ({ 
   investments, 
-  onUpdateReturn, 
-  selectedMonth, 
-  selectedYear 
+  onUpdateReturn
 }: InvestmentReturnUpdaterProps) => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedInvestment, setSelectedInvestment] = useState('');
-  const [monthlyReturn, setMonthlyReturn] = useState('');
-
-  const variableInvestments = investments.filter(inv => 
-    ['Ações', 'ETF', 'Criptomoeda', 'Fundo Imobiliário (FII)'].includes(inv.tipoInvestimento)
+  const [ganhoMonetario, setGanhoMonetario] = useState('');
+  const [rentabilidadePercentual, setRentabilidadePercentual] = useState('');
+  
+  // Filter to show only variable investments (stocks, ETFs, crypto, REITs)
+  const variableInvestments = investments.filter(investment =>
+    ['Ações', 'ETF', 'Criptomoeda', 'Fundo Imobiliário (FII)'].includes(investment.tipoInvestimento)
   );
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!selectedInvestment || !monthlyReturn) {
+  const handleSubmit = () => {
+    if (!selectedInvestment || !ganhoMonetario || !rentabilidadePercentual) {
       toast.error('Preencha todos os campos');
       return;
     }
 
-    const returnValue = parseFloat(monthlyReturn);
-    if (isNaN(returnValue)) {
-      toast.error('Valor de rentabilidade inválido');
+    const ganhoValue = parseFloat(ganhoMonetario);
+    const rentabilidadeValue = parseFloat(rentabilidadePercentual);
+    
+    if (isNaN(ganhoValue) || isNaN(rentabilidadeValue)) {
+      toast.error('Valores inválidos');
       return;
     }
 
-    onUpdateReturn(selectedInvestment, returnValue, selectedMonth, selectedYear);
+    onUpdateReturn(selectedInvestment, ganhoValue, rentabilidadeValue);
     toast.success('Rentabilidade atualizada com sucesso!');
     
+    // Reset form
     setSelectedInvestment('');
-    setMonthlyReturn('');
+    setGanhoMonetario('');
+    setRentabilidadePercentual('');
     setIsDialogOpen(false);
   };
 
@@ -59,18 +59,18 @@ const InvestmentReturnUpdater = ({
           Atualizar Rentabilidade
         </Button>
       </DialogTrigger>
+      
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>
-            Atualizar Rentabilidade Mensal - {selectedMonth.toString().padStart(2, '0')}/{selectedYear}
-          </DialogTitle>
+          <DialogTitle>Atualizar Rentabilidade Mensal</DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        
+        <div className="space-y-4">
           <div>
-            <Label htmlFor="investment-select">Investimento</Label>
+            <Label htmlFor="investment-select">Investimento de Renda Variável</Label>
             <Select value={selectedInvestment} onValueChange={setSelectedInvestment}>
               <SelectTrigger id="investment-select">
-                <SelectValue placeholder="Selecione um investimento de renda variável" />
+                <SelectValue placeholder="Selecione um investimento" />
               </SelectTrigger>
               <SelectContent>
                 {variableInvestments.map((investment) => (
@@ -83,26 +83,42 @@ const InvestmentReturnUpdater = ({
           </div>
           
           <div>
-            <Label htmlFor="monthly-return">Rentabilidade do Mês (%)</Label>
+            <Label htmlFor="ganho-monetario">Ganho/Perda Monetário (R$)</Label>
             <Input
-              id="monthly-return"
+              id="ganho-monetario"
               type="number"
               step="0.01"
-              value={monthlyReturn}
-              onChange={(e) => setMonthlyReturn(e.target.value)}
-              placeholder="Ex: 2.5 para 2,5%"
+              value={ganhoMonetario}
+              onChange={(e) => setGanhoMonetario(e.target.value)}
+              placeholder="Ex: 250.00"
             />
           </div>
-
-          <div className="flex gap-2 pt-4">
-            <Button type="submit" className="flex-1">
+          
+          <div>
+            <Label htmlFor="rentabilidade-percentual">Rentabilidade (%)</Label>
+            <Input
+              id="rentabilidade-percentual"
+              type="number"
+              step="0.01"
+              value={rentabilidadePercentual}
+              onChange={(e) => setRentabilidadePercentual(e.target.value)}
+              placeholder="Ex: 5.25"
+            />
+          </div>
+          
+          <div className="flex gap-2">
+            <Button onClick={handleSubmit} className="flex-1">
               Atualizar
             </Button>
-            <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
+            <Button 
+              variant="outline" 
+              onClick={() => setIsDialogOpen(false)}
+              className="flex-1"
+            >
               Cancelar
             </Button>
           </div>
-        </form>
+        </div>
       </DialogContent>
     </Dialog>
   );
