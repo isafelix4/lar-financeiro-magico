@@ -12,7 +12,6 @@ import { toast } from "sonner";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
-import InvestmentFilters from "@/components/dashboard/InvestmentFilters";
 import InvestmentReturnUpdater from "@/components/dashboard/InvestmentReturnUpdater";
 import { generateDistinctiveColors } from "@/lib/colorUtils";
 
@@ -27,16 +26,11 @@ const INVESTMENT_TYPES = [
   'Outros'
 ];
 
-
 const Investimentos = () => {
   const { investments, addInvestment, updateInvestment, deleteInvestment, updateInvestmentReturn, transactions } = useFinancialData();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingInvestment, setEditingInvestment] = useState<Investment | null>(null);
   const [sortConfig, setSortConfig] = useState<{ key: keyof Investment; direction: 'asc' | 'desc' } | null>(null);
-  
-  // Filtros de período
-  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   
   const [formData, setFormData] = useState({
     nome: '',
@@ -49,50 +43,24 @@ const Investimentos = () => {
     dataPrimeiroAporte: ''
   });
 
-  // Calculate KPIs based on selected filters (snapshot logic)
-  const getSnapshotForPeriod = (month: number, year: number) => {
-    return investments.reduce((acc, inv) => {
-      const dataInicio = new Date(inv.dataPrimeiroAporte);
-      const targetDate = new Date(year, month - 1);
-      
-      // Only include investment if target date is >= first investment date
-      if (targetDate < dataInicio) {
-        return acc;
-      }
-      
-      const snapshot = inv.snapshotsmensais?.find(s => s.mes === month && s.ano === year);
-      if (snapshot) {
-        acc.valorTotalAtualizado += snapshot.valorTotalAtualizado;
-        acc.valorTotalInvestido += snapshot.valorTotalInvestido;
-        acc.ganhoCapitalTotal += snapshot.ganhoCapitalMes;
-      } else {
-        // If no snapshot but investment should exist, use base values only if it's the first month
-        if (targetDate.getFullYear() === dataInicio.getFullYear() && 
-            targetDate.getMonth() === dataInicio.getMonth()) {
-          acc.valorTotalAtualizado += inv.valorAportado;
-          acc.valorTotalInvestido += inv.valorAportado;
-          acc.ganhoCapitalTotal += 0;
-        }
-      }
-      return acc;
-    }, { valorTotalAtualizado: 0, valorTotalInvestido: 0, ganhoCapitalTotal: 0 });
-  };
-
-  const snapshotAtual = getSnapshotForPeriod(selectedMonth, selectedYear);
-  const valorTotalAtualizado = snapshotAtual.valorTotalAtualizado;
+  // Calculate KPIs using current values
+  const valorTotalAtualizado = investments.reduce((sum, inv) => sum + inv.valorAtualizado, 0);
   const valorTotalAportado = investments.reduce((sum, inv) => sum + inv.valorAportado, 0);
   
   const rentabilidadeMedia = investments.length > 0 
     ? investments.reduce((sum, inv) => sum + (inv.rentabilidadeMensal * (inv.valorAportado / valorTotalAportado)), 0)
     : 0;
 
-  // Calculate monthly investment contributions from transactions (filtered)
+  // Calculate monthly investment contributions from current month transactions
+  const currentMonth = new Date().getMonth() + 1;
+  const currentYear = new Date().getFullYear();
+  
   const aporteDoMes = transactions
     .filter(t => 
       t.category === 'Transferências' && 
       t.subcategory === 'Investimentos' &&
-      t.month === selectedMonth && 
-      t.year === selectedYear &&
+      t.month === currentMonth && 
+      t.year === currentYear &&
       t.type === 'despesa'
     )
     .reduce((sum, t) => sum + t.amount, 0);
@@ -128,8 +96,9 @@ const Investimentos = () => {
   // Generate distinctive colors for chart
   const COLORS = generateDistinctiveColors(chartDataByType.length);
 
-  // Monthly evolution data using snapshots - all months since first investment
+  // Monthly evolution data for last 12 months
   const monthlyEvolution = [];
+  const currentDate = new Date();
   
   // Find earliest investment date
   const earliestDate = investments.reduce((earliest, investment) => {
@@ -138,59 +107,62 @@ const Investimentos = () => {
   }, null as Date | null);
   
   if (earliestDate) {
-    const currentDate = new Date();
-    const startDate = new Date(earliestDate.getFullYear(), earliestDate.getMonth(), 1);
+    const startDate = new Date(Math.max(
+      earliestDate.getTime(),
+      new Date(currentDate.getFullYear() - 1, currentDate.getMonth()).getTime()
+    ));
     
-    let targetDate = new Date(startDate);
+    let targetDate = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
     
     while (targetDate <= currentDate) {
       const month = targetDate.getMonth() + 1;
       const year = targetDate.getFullYear();
-    
-    // Aportes do mês
-    const aportesMes = transactions
-      .filter(t => 
-        t.category === 'Transferências' && 
-        t.subcategory === 'Investimentos' &&
-        t.month === month && 
-        t.year === year &&
-        t.type === 'despesa'
-      )
-      .reduce((sum, t) => sum + t.amount, 0);
+      
+      // Calculate total invested accumulated up to this month
+      const totalAportadoAcumulado = investments.reduce((sum, inv) => {
+        const investmentDate = new Date(inv.dataPrimeiroAporte);
+        const monthStart = new Date(year, month - 1, 1);
+        
+        // Only include investment value if it started before or during this month
+        if (investmentDate <= monthStart) {
+          return sum + inv.valorAportado;
+        }
+        return sum;
+      }, 0);
+      
+      // Contributions for this month
+      const aportesMes = transactions
+        .filter(t => 
+          t.category === 'Transferências' && 
+          t.subcategory === 'Investimentos' &&
+          t.month === month && 
+          t.year === year &&
+          t.type === 'despesa'
+        )
+        .reduce((sum, t) => sum + t.amount, 0);
 
-    // Resgates do mês
-    const resgatesMes = transactions
-      .filter(t => 
-        t.category === 'Variável' && 
-        t.subcategory === 'Investimentos' &&
-        t.month === month && 
-        t.year === year &&
-        t.type === 'receita'
-      )
-      .reduce((sum, t) => sum + t.amount, 0);
+      // Withdrawals for this month
+      const resgatesMes = transactions
+        .filter(t => 
+          t.category === 'Variável' && 
+          t.subcategory === 'Investimentos' &&
+          t.month === month && 
+          t.year === year &&
+          t.type === 'receita'
+        )
+        .reduce((sum, t) => sum + t.amount, 0);
 
-    // Obter snapshot do mês ou calcular
-    const snapshotMes = getSnapshotForPeriod(month, year);
-    
-    // Valor do mês anterior (para calcular base)
-    const mesAnterior = month === 1 ? 12 : month - 1;
-    const anoAnterior = month === 1 ? year - 1 : year;
-    const snapshotAnterior = getSnapshotForPeriod(mesAnterior, anoAnterior);
-    
-    // Calcular Valor Total Investido conforme fórmula solicitada:
-    // Valor Total Atualizado do mês anterior + Novos Aportes do mês - Resgates realizados no mês
-    const valorTotalInvestido = snapshotAnterior.valorTotalAtualizado + aportesMes - resgatesMes;
-    
-    // Ganho de Capital do mês
-    const ganhoCapitalMes = snapshotMes.valorTotalAtualizado - valorTotalInvestido;
+      // Net variation for the month (contributions + manual returns - withdrawals)
+      // For simplicity, we'll use 0 for manual returns since we don't have historical data
+      const variacaoLiquidaMes = aportesMes - resgatesMes;
 
-    const monthNames = ['jan.', 'fev.', 'mar.', 'abr.', 'mai.', 'jun.', 'jul.', 'ago.', 'set.', 'out.', 'nov.', 'dez.'];
-    const formattedDate = `${monthNames[month - 1]} de ${year}`;
+      const monthNames = ['jan.', 'fev.', 'mar.', 'abr.', 'mai.', 'jun.', 'jul.', 'ago.', 'set.', 'out.', 'nov.', 'dez.'];
+      const formattedDate = `${monthNames[month - 1]} de ${year}`;
 
       monthlyEvolution.push({
         mes: formattedDate,
-        valorTotalInvestido: Math.max(0, valorTotalInvestido),
-        ganhoCapitalTotal: Math.max(0, ganhoCapitalMes),
+        totalAportadoAcumulado: Math.max(0, totalAportadoAcumulado),
+        variacaoLiquidaMes: Math.max(0, variacaoLiquidaMes),
         aportesMes,
         resgatesMes
       });
@@ -305,136 +277,134 @@ const Investimentos = () => {
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold">Investimentos</h1>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="h-4 w-4 mr-2" />
-              Novo Investimento
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle>
-                {editingInvestment ? 'Editar Investimento' : 'Novo Investimento'}
-              </DialogTitle>
-            </DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <Label htmlFor="nome">Nome do Ativo *</Label>
-                <Input
-                  id="nome"
-                  value={formData.nome}
-                  onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
-                  placeholder="Ex: Itaú Unibanco PN"
-                />
-              </div>
-              
-              <div>
-                <Label htmlFor="tipoInvestimento">Tipo de Investimento *</Label>
-                <Select value={formData.tipoInvestimento} onValueChange={(value) => setFormData({ ...formData, tipoInvestimento: value })}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione o tipo" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {INVESTMENT_TYPES.map((type) => (
-                      <SelectItem key={type} value={type}>{type}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
+        <div className="flex gap-2">
+          <InvestmentReturnUpdater
+            investments={investments}
+            onUpdateReturn={updateInvestmentReturn}
+          />
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="h-4 w-4 mr-2" />
+                Novo Investimento
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>
+                  {editingInvestment ? 'Editar Investimento' : 'Novo Investimento'}
+                </DialogTitle>
+              </DialogHeader>
+              <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                  <Label htmlFor="valorAportado">Valor Aportado *</Label>
+                  <Label htmlFor="nome">Nome do Ativo *</Label>
                   <Input
-                    id="valorAportado"
-                    type="number"
-                    step="0.01"
-                    value={formData.valorAportado}
-                    onChange={(e) => setFormData({ ...formData, valorAportado: e.target.value })}
-                    placeholder="0,00"
+                    id="nome"
+                    value={formData.nome}
+                    onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
+                    placeholder="Ex: Itaú Unibanco PN"
                   />
                 </div>
                 
                 <div>
-                  <Label htmlFor="valorAtualizado">Valor Atualizado</Label>
-                  <Input
-                    id="valorAtualizado"
-                    type="number"
-                    step="0.01"
-                    value={formData.valorAtualizado}
-                    onChange={(e) => setFormData({ ...formData, valorAtualizado: e.target.value })}
-                    placeholder="0,00"
-                  />
+                  <Label htmlFor="tipoInvestimento">Tipo de Investimento *</Label>
+                  <Select value={formData.tipoInvestimento} onValueChange={(value) => setFormData({ ...formData, tipoInvestimento: value })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione o tipo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {INVESTMENT_TYPES.map((type) => (
+                        <SelectItem key={type} value={type}>{type}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
-              </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="rentabilidadeMensal">Rentabilidade/Taxa ao mês (%)</Label>
-                  <Input
-                    id="rentabilidadeMensal"
-                    type="number"
-                    step="0.01"
-                    value={formData.rentabilidadeMensal}
-                    onChange={(e) => setFormData({ ...formData, rentabilidadeMensal: e.target.value })}
-                    placeholder="0,00"
-                  />
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="valorAportado">Valor Aportado *</Label>
+                    <Input
+                      id="valorAportado"
+                      type="number"
+                      step="0.01"
+                      value={formData.valorAportado}
+                      onChange={(e) => setFormData({ ...formData, valorAportado: e.target.value })}
+                      placeholder="0,00"
+                    />
+                  </div>
+                  
+                  <div>
+                    <Label htmlFor="valorAtualizado">Valor Atualizado</Label>
+                    <Input
+                      id="valorAtualizado"
+                      type="number"
+                      step="0.01"
+                      value={formData.valorAtualizado}
+                      onChange={(e) => setFormData({ ...formData, valorAtualizado: e.target.value })}
+                      placeholder="0,00"
+                    />
+                  </div>
                 </div>
-                
-                <div>
-                  <Label htmlFor="indicadorAtrelado">Indicador Atrelado</Label>
-                  <Input
-                    id="indicadorAtrelado"
-                    value={formData.indicadorAtrelado}
-                    onChange={(e) => setFormData({ ...formData, indicadorAtrelado: e.target.value })}
-                    placeholder="Ex: CDI, IPCA, IBOV"
-                  />
-                </div>
-              </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="corretora">Corretora/Instituição *</Label>
-                  <Input
-                    id="corretora"
-                    value={formData.corretora}
-                    onChange={(e) => setFormData({ ...formData, corretora: e.target.value })}
-                    placeholder="Ex: XP Investimentos"
-                  />
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="rentabilidadeMensal">Rentabilidade/Taxa ao mês (%)</Label>
+                    <Input
+                      id="rentabilidadeMensal"
+                      type="number"
+                      step="0.01"
+                      value={formData.rentabilidadeMensal}
+                      onChange={(e) => setFormData({ ...formData, rentabilidadeMensal: e.target.value })}
+                      placeholder="0,00"
+                    />
+                  </div>
+                  
+                  <div>
+                    <Label htmlFor="indicadorAtrelado">Indicador Atrelado</Label>
+                    <Input
+                      id="indicadorAtrelado"
+                      value={formData.indicadorAtrelado}
+                      onChange={(e) => setFormData({ ...formData, indicadorAtrelado: e.target.value })}
+                      placeholder="Ex: CDI, IPCA, IBOV"
+                    />
+                  </div>
                 </div>
-                
-                <div>
-                  <Label htmlFor="dataPrimeiroAporte">Data do Primeiro Aporte *</Label>
-                  <Input
-                    id="dataPrimeiroAporte"
-                    type="date"
-                    value={formData.dataPrimeiroAporte}
-                    onChange={(e) => setFormData({ ...formData, dataPrimeiroAporte: e.target.value })}
-                  />
-                </div>
-              </div>
 
-              <div className="flex gap-2 pt-4">
-                <Button type="submit" className="flex-1">
-                  {editingInvestment ? 'Atualizar' : 'Adicionar'}
-                </Button>
-                <Button type="button" variant="outline" onClick={resetForm}>
-                  Cancelar
-                </Button>
-              </div>
-            </form>
-          </DialogContent>
-        </Dialog>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="corretora">Corretora/Instituição *</Label>
+                    <Input
+                      id="corretora"
+                      value={formData.corretora}
+                      onChange={(e) => setFormData({ ...formData, corretora: e.target.value })}
+                      placeholder="Ex: XP Investimentos"
+                    />
+                  </div>
+                  
+                  <div>
+                    <Label htmlFor="dataPrimeiroAporte">Data do Primeiro Aporte *</Label>
+                    <Input
+                      id="dataPrimeiroAporte"
+                      type="date"
+                      value={formData.dataPrimeiroAporte}
+                      onChange={(e) => setFormData({ ...formData, dataPrimeiroAporte: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex gap-2 pt-4">
+                  <Button type="submit" className="flex-1">
+                    {editingInvestment ? 'Atualizar' : 'Adicionar'}
+                  </Button>
+                  <Button type="button" variant="outline" onClick={resetForm}>
+                    Cancelar
+                  </Button>
+                </div>
+              </form>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
-
-      {/* Filters */}
-      <InvestmentFilters
-        selectedMonth={selectedMonth}
-        selectedYear={selectedYear}
-        onMonthChange={setSelectedMonth}
-        onYearChange={setSelectedYear}
-      />
 
       {/* KPIs */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -467,181 +437,175 @@ const Investimentos = () => {
           <CardContent>
             <div className="text-2xl font-bold">{formatCurrency(aporteDoMes)}</div>
             <p className="text-xs text-muted-foreground">
-              {selectedMonth.toString().padStart(2, '0')}/{selectedYear}
+              {new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
             </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Controle</CardTitle>
+            <CardTitle className="text-sm font-medium">Total de Ativos</CardTitle>
           </CardHeader>
           <CardContent>
-            <InvestmentReturnUpdater
-              investments={investments}
-              onUpdateReturn={updateInvestmentReturn}
-              selectedMonth={selectedMonth}
-              selectedYear={selectedYear}
-            />
+            <div className="text-2xl font-bold">{investments.length}</div>
+            <p className="text-xs text-muted-foreground">investimentos ativos</p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Evolution Chart */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Evolução Mensal dos Investimentos</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="h-80 overflow-x-auto">
-              <div style={{ minWidth: Math.max(800, monthlyEvolution.length * 80) }}>
-                <ResponsiveContainer width="100%" height="100%">
-                   <BarChart data={monthlyEvolution}>
-                     <CartesianGrid strokeDasharray="3 3" />
-                     <XAxis 
-                       dataKey="mes" 
-                       tick={{ fontSize: 12 }}
-                       angle={-45}
-                       textAnchor="end"
-                       height={70}
-                     />
-                     <YAxis tickFormatter={(value) => formatCurrency(value)} />
-                     <Tooltip formatter={(value: number) => formatCurrency(value)} />
-                     <Legend />
-                     <Bar dataKey="valorTotalInvestido" stackId="a" fill="hsl(var(--chart-1))" name="Valor Total Investido" />
-                     <Bar dataKey="ganhoCapitalTotal" stackId="a" fill="hsl(var(--chart-2))" name="Ganho de Capital Total" />
-                   </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+      {/* Evolution Chart - Full Width */}
+      <Card className="w-full">
+        <CardHeader>
+          <CardTitle>Evolução Mensal da Carteira (Últimos 12 Meses)</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="h-80 w-full overflow-x-auto">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={monthlyEvolution}
+                margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis 
+                  dataKey="mes" 
+                  angle={-45}
+                  textAnchor="end"
+                  height={100}
+                  interval={0}
+                />
+                <YAxis tickFormatter={(value) => formatCurrency(value)} />
+                <Tooltip formatter={(value) => formatCurrency(Number(value))} />
+                <Legend />
+                <Bar 
+                  dataKey="totalAportadoAcumulado" 
+                  stackId="a" 
+                  fill="hsl(var(--primary))"
+                  name="Total Aportado Acumulado"
+                />
+                <Bar 
+                  dataKey="variacaoLiquidaMes" 
+                  stackId="a" 
+                  fill="hsl(var(--secondary))"
+                  name="Variação Líquida no Mês"
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </CardContent>
+      </Card>
 
-        {/* Portfolio Composition */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Composição da Carteira</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className="lg:col-span-2">
-                <div className="h-80">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={chartDataByType}
-                        cx="50%"
-                        cy="50%"
-                        outerRadius={100}
-                        fill="#8884d8"
-                        dataKey="valor"
-                      >
-                        {chartDataByType.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip 
-                        formatter={(value: number, name, props) => {
-                          const entry = props.payload;
-                          if (!entry) return [formatCurrency(value), name];
-                          
-                          const indicadores = entry.indicadores || {};
-                          const total = entry.valor || 0;
-                          
-                          const lines = [
-                            `Total: ${formatCurrency(total)}`
-                          ];
-                          
-                          // Add indicator breakdown
-                          Object.entries(indicadores).forEach(([indicator, amount]) => {
-                            const percentage = total > 0 ? ((amount as number / total) * 100).toFixed(1) : 0;
-                            lines.push(`${indicator}: ${formatCurrency(amount as number)} (${percentage}%)`);
-                          });
-                          
-                          return lines;
-                        }}
-                        labelFormatter={(value) => `Tipo: ${value}`}
-                      />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-              
-              {/* Legend */}
-              <div className="space-y-2">
-                <h4 className="font-semibold text-lg">Tipos de Investimento</h4>
-                  <div className="space-y-2 max-h-80 overflow-y-auto">
-                    {chartDataByType.map((item, index) => (
-                      <div 
-                        key={item.tipo}
-                        className="flex items-center gap-3 p-2 rounded-lg border hover:bg-muted/50 transition-colors"
-                      >
-                        <div 
-                          className="w-4 h-4 rounded-full flex-shrink-0"
-                          style={{ backgroundColor: COLORS[index % COLORS.length] }}
-                        />
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium text-sm truncate">{item.tipo}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {formatCurrency(item.valor)} ({((item.valor / valorTotalAtualizado) * 100).toFixed(1)}%)
-                          </p>
-                          <div className="mt-1 space-y-1">
-                            {Object.entries(item.indicadores).map(([indicator, amount]) => (
-                              <p key={indicator} className="text-xs text-muted-foreground ml-2">
-                                • {indicator}: {formatCurrency(amount as number)}
-                              </p>
-                            ))}
-                          </div>
+      {/* Composition Chart - Full Width */}
+      <Card className="w-full">
+        <CardHeader>
+          <CardTitle>Composição da Carteira por Tipo de Investimento</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="h-80 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={chartDataByType}
+                  cx="50%"
+                  cy="50%"
+                  outerRadius={100}
+                  fill="#8884d8"
+                  dataKey="valor"
+                  label={({ tipo, value }) => `${tipo}: ${formatCurrency(value)}`}
+                >
+                  {chartDataByType.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip 
+                  formatter={(value, name, props) => {
+                    const indicadores = props.payload.indicadores;
+                    const total = Number(value);
+                    const percentage = ((total / valorTotalAtualizado) * 100).toFixed(1);
+                    
+                    return [
+                      <div key="tooltip">
+                        <div>{formatCurrency(total)} ({percentage}%)</div>
+                        <div className="mt-2 text-sm">
+                          <strong>Detalhamento por Indicador:</strong>
+                          {Object.entries(indicadores).map(([indicador, valor]) => (
+                            <div key={indicador}>
+                              {indicador}: {formatCurrency(Number(valor))} ({((Number(valor) / total) * 100).toFixed(1)}%)
+                            </div>
+                          ))}
                         </div>
-                      </div>
-                    ))}
-                  </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+                      </div>,
+                      props.payload.tipo
+                    ];
+                  }}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        </CardContent>
+      </Card>
 
-      {/* Investments Table */}
+      {/* Investment Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Controle de Investimentos</CardTitle>
+          <CardTitle>Lista de Investimentos</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="cursor-pointer" onClick={() => handleSort('nome')}>
-                    <div className="flex items-center gap-1">
+                  <TableHead>
+                    <Button
+                      variant="ghost"
+                      onClick={() => handleSort('nome')}
+                      className="h-auto p-0 font-semibold"
+                    >
                       Nome do Ativo
-                      <ArrowUpDown className="h-4 w-4" />
-                    </div>
+                      <ArrowUpDown className="ml-2 h-4 w-4" />
+                    </Button>
                   </TableHead>
-                  <TableHead className="cursor-pointer" onClick={() => handleSort('tipoInvestimento')}>
-                    <div className="flex items-center gap-1">
+                  <TableHead>
+                    <Button
+                      variant="ghost"
+                      onClick={() => handleSort('tipoInvestimento')}
+                      className="h-auto p-0 font-semibold"
+                    >
                       Tipo
-                      <ArrowUpDown className="h-4 w-4" />
-                    </div>
+                      <ArrowUpDown className="ml-2 h-4 w-4" />
+                    </Button>
                   </TableHead>
-                  <TableHead className="cursor-pointer" onClick={() => handleSort('valorAportado')}>
-                    <div className="flex items-center gap-1">
+                  <TableHead>
+                    <Button
+                      variant="ghost"
+                      onClick={() => handleSort('valorAportado')}
+                      className="h-auto p-0 font-semibold"
+                    >
                       Valor Aportado
-                      <ArrowUpDown className="h-4 w-4" />
-                    </div>
+                      <ArrowUpDown className="ml-2 h-4 w-4" />
+                    </Button>
                   </TableHead>
-                  <TableHead className="cursor-pointer" onClick={() => handleSort('valorAtualizado')}>
-                    <div className="flex items-center gap-1">
+                  <TableHead>
+                    <Button
+                      variant="ghost"
+                      onClick={() => handleSort('valorAtualizado')}
+                      className="h-auto p-0 font-semibold"
+                    >
                       Valor Atualizado
-                      <ArrowUpDown className="h-4 w-4" />
-                    </div>
+                      <ArrowUpDown className="ml-2 h-4 w-4" />
+                    </Button>
                   </TableHead>
-                  <TableHead>Rentabilidade</TableHead>
+                  <TableHead>
+                    <Button
+                      variant="ghost"
+                      onClick={() => handleSort('rentabilidadeMensal')}
+                      className="h-auto p-0 font-semibold"
+                    >
+                      Rentabilidade
+                      <ArrowUpDown className="ml-2 h-4 w-4" />
+                    </Button>
+                  </TableHead>
                   <TableHead>Indicador</TableHead>
                   <TableHead>Corretora</TableHead>
-                  <TableHead>Data Aporte</TableHead>
                   <TableHead>Ações</TableHead>
                 </TableRow>
               </TableHeader>
@@ -653,17 +617,20 @@ const Investimentos = () => {
                       <Badge variant="outline">{investment.tipoInvestimento}</Badge>
                     </TableCell>
                     <TableCell>{formatCurrency(investment.valorAportado)}</TableCell>
-                    <TableCell className="font-medium">
-                      {formatCurrency(investment.valorAtualizado)}
+                    <TableCell>
+                      <div className="flex flex-col">
+                        <span>{formatCurrency(investment.valorAtualizado)}</span>
+                        <span className={`text-xs ${investment.valorAtualizado >= investment.valorAportado ? 'text-green-600' : 'text-red-600'}`}>
+                          {investment.valorAtualizado >= investment.valorAportado ? '+' : ''}
+                          {formatCurrency(investment.valorAtualizado - investment.valorAportado)}
+                        </span>
+                      </div>
                     </TableCell>
                     <TableCell>{investment.rentabilidadeMensal.toFixed(2)}%</TableCell>
                     <TableCell>{investment.indicadorAtrelado || '-'}</TableCell>
                     <TableCell>{investment.corretora}</TableCell>
                     <TableCell>
-                      {new Date(investment.dataPrimeiroAporte).toLocaleDateString('pt-BR')}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex gap-2">
+                      <div className="flex space-x-2">
                         <Button
                           variant="outline"
                           size="sm"
@@ -684,11 +651,6 @@ const Investimentos = () => {
                 ))}
               </TableBody>
             </Table>
-            {investments.length === 0 && (
-              <div className="text-center py-8 text-muted-foreground">
-                Nenhum investimento cadastrado. Clique em "Novo Investimento" para começar.
-              </div>
-            )}
           </div>
         </CardContent>
       </Card>
