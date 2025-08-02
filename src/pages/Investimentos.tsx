@@ -500,46 +500,76 @@ const Investimentos = () => {
           <CardTitle>Composição da Carteira por Tipo de Investimento</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="h-80 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={chartDataByType}
-                  cx="50%"
-                  cy="50%"
-                  outerRadius={100}
-                  fill="#8884d8"
-                  dataKey="valor"
-                  label={({ tipo, value }) => `${tipo}: ${formatCurrency(value)}`}
-                >
-                  {chartDataByType.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip 
-                  formatter={(value, name, props) => {
-                    const indicadores = props.payload.indicadores;
-                    const total = Number(value);
-                    const percentage = ((total / valorTotalAtualizado) * 100).toFixed(1);
-                    
-                    return [
-                      <div key="tooltip">
-                        <div>{formatCurrency(total)} ({percentage}%)</div>
-                        <div className="mt-2 text-sm">
-                          <strong>Detalhamento por Indicador:</strong>
-                          {Object.entries(indicadores).map(([indicador, valor]) => (
-                            <div key={indicador}>
-                              {indicador}: {formatCurrency(Number(valor))} ({((Number(valor) / total) * 100).toFixed(1)}%)
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2">
+              <div className="h-80 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={chartDataByType}
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={120}
+                      fill="#8884d8"
+                      dataKey="valor"
+                    >
+                      {chartDataByType.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip 
+                      formatter={(value, name, props) => {
+                        const indicadores = props.payload.indicadores;
+                        const total = Number(value);
+                        const percentage = ((total / valorTotalAtualizado) * 100).toFixed(1);
+                        
+                        return [
+                          <div key="tooltip">
+                            <div>{formatCurrency(total)} ({percentage}%)</div>
+                            <div className="mt-2 text-sm">
+                              <strong>Detalhamento por Indicador:</strong>
+                              {Object.entries(indicadores).map(([indicador, valor]) => (
+                                <div key={indicador}>
+                                  {indicador}: {formatCurrency(Number(valor))} ({((Number(valor) / total) * 100).toFixed(1)}%)
+                                </div>
+                              ))}
                             </div>
-                          ))}
-                        </div>
-                      </div>,
-                      props.payload.tipo
-                    ];
-                  }}
-                />
-              </PieChart>
-            </ResponsiveContainer>
+                          </div>,
+                          props.payload.tipo
+                        ];
+                      }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+            
+            {/* Legend */}
+            <div className="space-y-2">
+              <h4 className="font-semibold text-lg">Tipos de Investimento</h4>
+              <div className="space-y-2 max-h-80 overflow-y-auto">
+                {chartDataByType.map((item, index) => {
+                  const percentage = ((item.valor / valorTotalAtualizado) * 100).toFixed(1);
+                  return (
+                    <div 
+                      key={item.tipo}
+                      className="flex items-center gap-3 p-2 rounded-lg border hover:bg-muted/50 transition-colors"
+                    >
+                      <div 
+                        className="w-4 h-4 rounded-full flex-shrink-0"
+                        style={{ backgroundColor: COLORS[index % COLORS.length] }}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm truncate">{item.tipo}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {formatCurrency(item.valor)} ({percentage}%)
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         </CardContent>
       </Card>
