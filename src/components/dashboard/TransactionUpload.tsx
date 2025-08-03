@@ -25,9 +25,8 @@ export const TransactionUpload = ({ onPendingTransactions }: TransactionUploadPr
   const [selectedAccount, setSelectedAccount] = useState("");
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-  const [newAccountName, setNewAccountName] = useState("");
   const { toast } = useToast();
-  const { categories, accounts, addAccount } = useFinancialData();
+  const { categories, accounts } = useFinancialData();
 
   const categorizeTransaction = (description: string): { category: string; subcategory?: string; type: 'receita' | 'despesa' } => {
     const desc = description.toLowerCase();
@@ -271,10 +270,10 @@ export const TransactionUpload = ({ onPendingTransactions }: TransactionUploadPr
     const file = event.target.files?.[0];
     if (!file) return;
 
-    if (!selectedAccount && !newAccountName) {
+    if (!selectedAccount) {
       toast({
         title: "Erro",
-        description: "Selecione uma conta ou crie uma nova",
+        description: "Selecione uma conta bancária",
         variant: "destructive"
       });
       return;
@@ -323,21 +322,13 @@ export const TransactionUpload = ({ onPendingTransactions }: TransactionUploadPr
       }
 
       // Determinar conta final
-      let finalAccount = selectedAccount;
-      if (newAccountName && !selectedAccount) {
-        const newAccount = addAccount({ name: newAccountName });
-        finalAccount = newAccount.name; // Usar o nome da conta em vez do ID
-      } else if (selectedAccount) {
-        // Encontrar o nome da conta pelo ID selecionado
-        const account = accounts.find(acc => acc.id === selectedAccount);
-        finalAccount = account ? account.name : selectedAccount;
-      }
+      const account = accounts.find(acc => acc.id === selectedAccount);
+      const finalAccount = account ? account.name : selectedAccount;
       
       onPendingTransactions(pendingTransactions, finalAccount, selectedMonth, selectedYear);
       
       setIsOpen(false);
       setSelectedAccount("");
-      setNewAccountName("");
     } catch (error) {
       toast({
         title: "Erro no upload",
@@ -364,38 +355,20 @@ export const TransactionUpload = ({ onPendingTransactions }: TransactionUploadPr
         </DialogHeader>
         <div className="space-y-6">
           {/* Seleção de Conta */}
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="account-select">Conta Bancária</Label>
-              <Select value={selectedAccount} onValueChange={setSelectedAccount}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione uma conta existente" />
-                </SelectTrigger>
-                <SelectContent>
-                  {accounts.map(account => (
-                    <SelectItem key={account.id} value={account.id}>
-                      {account.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <div className="flex items-center gap-2">
-              <div className="h-px bg-border flex-1" />
-              <span className="text-sm text-muted-foreground">ou</span>
-              <div className="h-px bg-border flex-1" />
-            </div>
-            
-            <div>
-              <Label htmlFor="new-account">Nova Conta</Label>
-              <Input
-                id="new-account"
-                value={newAccountName}
-                onChange={(e) => setNewAccountName(e.target.value)}
-                placeholder="Nome da nova conta"
-              />
-            </div>
+          <div>
+            <Label htmlFor="account-select">Conta Bancária</Label>
+            <Select value={selectedAccount} onValueChange={setSelectedAccount}>
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione uma conta" />
+              </SelectTrigger>
+              <SelectContent>
+                {accounts.map(account => (
+                  <SelectItem key={account.id} value={account.id}>
+                    {account.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           {/* Seleção de Mês e Ano */}

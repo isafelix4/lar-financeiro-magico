@@ -10,7 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import type { Category, Subcategory } from "@/types/financial";
 
 const Configuracoes = () => {
-  const { categories, addCategory, updateCategory, deleteCategory, addSubcategory, deleteSubcategory } = useFinancialData();
+  const { categories, accounts, addCategory, updateCategory, deleteCategory, addSubcategory, deleteSubcategory, addAccount, updateAccount, deleteAccount } = useFinancialData();
   const { toast } = useToast();
   
   const [newCategoryName, setNewCategoryName] = useState("");
@@ -19,6 +19,11 @@ const Configuracoes = () => {
   const [selectedCategoryForSub, setSelectedCategoryForSub] = useState("");
   const [editingCategory, setEditingCategory] = useState<string | null>(null);
   const [editCategoryName, setEditCategoryName] = useState("");
+  
+  // Estados para gerenciamento de contas
+  const [newAccountName, setNewAccountName] = useState("");
+  const [editingAccount, setEditingAccount] = useState<string | null>(null);
+  const [editAccountName, setEditAccountName] = useState("");
 
   const handleAddCategory = () => {
     if (!newCategoryName.trim()) {
@@ -98,6 +103,50 @@ const Configuracoes = () => {
     setEditCategoryName(category.name);
   };
 
+  // Funções para gerenciamento de contas
+  const handleAddAccount = () => {
+    if (!newAccountName.trim()) {
+      toast({
+        title: "Erro",
+        description: "Nome da conta é obrigatório",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    addAccount({ name: newAccountName });
+    setNewAccountName("");
+    toast({
+      title: "Sucesso",
+      description: "Conta criada com sucesso"
+    });
+  };
+
+  const handleEditAccount = (accountId: string, newName: string) => {
+    if (!newName.trim()) return;
+    
+    updateAccount(accountId, { name: newName });
+    setEditingAccount(null);
+    setEditAccountName("");
+    toast({
+      title: "Sucesso",
+      description: "Conta atualizada com sucesso"
+    });
+  };
+
+  const handleDeleteAccount = (accountId: string) => {
+    deleteAccount(accountId);
+    toast({
+      title: "Sucesso",
+      description: "Conta removida com sucesso"
+    });
+  };
+
+  const startEditingAccount = (account: any) => {
+    setEditingAccount(account.id);
+    setEditAccountName(account.name);
+  };
+
   const despenseCategories = categories.filter(cat => cat.type === 'despesa');
   const receiptCategories = categories.filter(cat => cat.type === 'receita');
 
@@ -105,7 +154,7 @@ const Configuracoes = () => {
     <div className="space-y-6 p-6">
       <h1 className="text-3xl font-bold text-foreground">Configurações</h1>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Adicionar Nova Categoria */}
         <Card>
           <CardHeader>
@@ -181,6 +230,31 @@ const Configuracoes = () => {
 
             <Button onClick={handleAddSubcategory} className="w-full">
               Criar Subcategoria
+            </Button>
+          </CardContent>
+        </Card>
+
+        {/* Adicionar Nova Conta Bancária */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Plus className="h-5 w-5" />
+              Nova Conta Bancária
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <Label htmlFor="account-name">Nome da Conta</Label>
+              <Input
+                id="account-name"
+                value={newAccountName}
+                onChange={(e) => setNewAccountName(e.target.value)}
+                placeholder="Ex: Nubank, Itaú, Conta Corrente"
+              />
+            </div>
+
+            <Button onClick={handleAddAccount} className="w-full">
+              Criar Conta
             </Button>
           </CardContent>
         </Card>
@@ -326,6 +400,61 @@ const Configuracoes = () => {
                     ))}
                   </div>
                 )}
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Contas Bancárias */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-info">Contas Bancárias</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            {accounts.map(account => (
+              <div key={account.id} className="border rounded-lg p-4">
+                <div className="flex items-center justify-between">
+                  {editingAccount === account.id ? (
+                    <div className="flex items-center gap-2 flex-1">
+                      <Input
+                        value={editAccountName}
+                        onChange={(e) => setEditAccountName(e.target.value)}
+                        onBlur={() => handleEditAccount(account.id, editAccountName)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            handleEditAccount(account.id, editAccountName);
+                          }
+                          if (e.key === 'Escape') {
+                            setEditingAccount(null);
+                            setEditAccountName("");
+                          }
+                        }}
+                        autoFocus
+                      />
+                    </div>
+                  ) : (
+                    <h4 className="font-medium text-foreground">{account.name}</h4>
+                  )}
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => startEditingAccount(account)}
+                    >
+                      <Edit className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleDeleteAccount(account.id)}
+                      className="text-destructive hover:text-destructive"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
               </div>
             ))}
           </div>

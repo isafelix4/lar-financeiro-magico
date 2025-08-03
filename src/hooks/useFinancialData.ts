@@ -255,6 +255,16 @@ export const useFinancialData = () => {
     return newAccount;
   };
 
+  const updateAccount = (accountId: string, updates: Partial<Account>) => {
+    setAccounts(prev => prev.map(acc => 
+      acc.id === accountId ? { ...acc, ...updates } : acc
+    ));
+  };
+
+  const deleteAccount = (accountId: string) => {
+    setAccounts(prev => prev.filter(acc => acc.id !== accountId));
+  };
+
   const addTransactions = (newTransactions: Transaction[]) => {
     // Verificar e adicionar novas contas automaticamente
     newTransactions.forEach(transaction => {
@@ -419,6 +429,8 @@ export const useFinancialData = () => {
     addSubcategory,
     deleteSubcategory,
     addAccount,
+    updateAccount,
+    deleteAccount,
     addTransactions,
     updateTransaction,
     deleteTransaction,

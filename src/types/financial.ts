@@ -27,6 +27,7 @@ export interface Transaction {
   account: string;
   month: number;
   year: number;
+  observations?: string;
 }
 
 export interface BudgetItem {
@@ -36,6 +37,7 @@ export interface BudgetItem {
   amount: number;
   month: number;
   year: number;
+  status?: 'pago' | 'pendente';
 }
 
 export interface PendingTransaction {
@@ -46,6 +48,7 @@ export interface PendingTransaction {
   suggestedCategory: string;
   suggestedSubcategory?: string;
   suggestedType: 'receita' | 'despesa';
+  observations?: string;
 }
 
 export interface Debt {

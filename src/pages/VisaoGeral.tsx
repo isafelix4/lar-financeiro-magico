@@ -62,14 +62,8 @@ const VisaoGeral = () => {
     setPendingTransactions([]);
   };
 
-  // Filtrar transações baseado nos filtros selecionados
-  const filteredTransactions = transactions.filter(transaction => {
-    // Ignorar transferências nos cálculos
-    if (transaction.category === 'Transferências' || 
-        transaction.subcategory === 'Transferência entre Contas') {
-      return false;
-    }
-
+  // Filtrar transações baseado nos filtros selecionados (incluindo transferências para visualização)
+  const filteredTransactionsForView = transactions.filter(transaction => {
     const monthMatch = selectedMonth.length === 0 || selectedMonth.includes(transaction.month);
     const yearMatch = selectedYear.length === 0 || selectedYear.includes(transaction.year);
     const accountMatch = selectedAccount.length === 0 || selectedAccount.includes(transaction.account);
@@ -78,6 +72,12 @@ const VisaoGeral = () => {
       (transaction.subcategory && selectedSubcategory.includes(transaction.subcategory));
     
     return monthMatch && yearMatch && accountMatch && categoryMatch && subcategoryMatch;
+  });
+
+  // Filtrar transações para cálculos (excluindo transferências)
+  const filteredTransactions = filteredTransactionsForView.filter(transaction => {
+    return !(transaction.category === 'Transferências' || 
+             transaction.subcategory === 'Transferência entre Contas');
   });
 
   // Calcular KPIs
@@ -274,7 +274,7 @@ const VisaoGeral = () => {
           <CardTitle>Lançamentos</CardTitle>
         </CardHeader>
         <CardContent>
-          {filteredTransactions.length === 0 ? (
+          {filteredTransactionsForView.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               <p>Nenhum lançamento encontrado para os filtros selecionados.</p>
             </div>
@@ -320,11 +320,12 @@ const VisaoGeral = () => {
                       </div>
                     </TableHead>
                     <TableHead>Subcategoria</TableHead>
+                    <TableHead>Observações</TableHead>
                     <TableHead className="w-12">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {sortTransactions(filteredTransactions)
+                  {sortTransactions(filteredTransactionsForView)
                     .map((transaction) => (
                     <TableRow key={transaction.id}>
                       <TableCell>
@@ -341,6 +342,9 @@ const VisaoGeral = () => {
                       </TableCell>
                       <TableCell>{transaction.category}</TableCell>
                       <TableCell>{transaction.subcategory || '-'}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground max-w-32 truncate">
+                        {transaction.observations || '-'}
+                      </TableCell>
                       <TableCell>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>

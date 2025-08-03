@@ -101,6 +101,7 @@ export const TransactionReview = ({
       suggestedCategory: category,
       suggestedSubcategory: subcategory,
       suggestedType: formData.get('type') as 'receita' | 'despesa',
+      observations: formData.get('observations') as string || undefined,
       linkedDebtId: category === 'Dívidas' ? formData.get('linkedDebt') as string : undefined
     };
 
@@ -176,7 +177,8 @@ export const TransactionReview = ({
       subcategory: pt.suggestedSubcategory,
       account: selectedAccount,
       month: selectedMonth,
-      year: selectedYear
+      year: selectedYear,
+      observations: pt.observations
     }));
 
     // Update linked debts
@@ -526,6 +528,18 @@ export const TransactionReview = ({
                       </SelectContent>
                     </Select>
                   </div>
+                </div>
+
+                {/* Campo de Observações */}
+                <div className="mt-4">
+                  <label className="text-sm font-medium text-foreground mb-2 block">
+                    Observações
+                  </label>
+                  <Input
+                    value={transaction.observations || ''}
+                    onChange={(e) => updateTransaction(index, 'observations', e.target.value)}
+                    placeholder="Observações opcionais"
+                  />
                 </div>
 
                 {/* Debt linking field */}

@@ -65,13 +65,14 @@ const Planejamento = () => {
     ));
   };
 
-  const handleAddBudgetLine = () => {
+  const handleAddBudgetLine = (status: 'pago' | 'pendente' = 'pendente') => {
     addBudgetItem({
       categoryId: '',
       subcategoryId: '',
       amount: 0,
       month: selectedMonth,
-      year: selectedYear
+      year: selectedYear,
+      status
     });
   };
 
@@ -87,6 +88,10 @@ const Planejamento = () => {
   const currentBudgetItems = budgetItems.filter(item => 
     item.month === selectedMonth && item.year === selectedYear
   );
+
+  // Separar itens pagos e pendentes
+  const budgetItemsPagos = currentBudgetItems.filter(item => item.status === 'pago');
+  const budgetItemsPendentes = currentBudgetItems.filter(item => item.status !== 'pago');
 
   // Preparar dados para o gráfico comparativo
   const chartData = currentBudgetItems.map(item => {
@@ -230,166 +235,293 @@ const Planejamento = () => {
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Fontes de Renda */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center justify-between">
-              <span>Fontes de Renda</span>
-              <Button size="sm" onClick={handleAddRenda}>
-                <DollarSign className="h-4 w-4 mr-2" />
-                Adicionar
-              </Button>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {rendas.map((renda) => (
-              <div key={renda.id} className="grid grid-cols-3 gap-2 items-center">
-                <Input
-                  value={renda.nome}
-                  onChange={(e) => handleUpdateRenda(renda.id, 'nome', e.target.value)}
-                  placeholder="Nome da renda"
-                />
-                <Input
-                  type="number"
-                  value={renda.valor}
-                  onChange={(e) => handleUpdateRenda(renda.id, 'valor', parseFloat(e.target.value) || 0)}
-                  placeholder="Valor"
-                />
-                <select
-                  value={renda.restricao || ''}
-                  onChange={(e) => handleUpdateRenda(renda.id, 'restricao', e.target.value || undefined)}
-                  className="px-3 py-2 border border-input rounded-md text-sm"
-                >
-                  <option value="">Sem restrição</option>
-                  <option value="alimentacao">Vale Alimentação</option>
-                  <option value="transporte">Vale Transporte</option>
-                </select>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
+      {/* Fontes de Renda */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            <span>Fontes de Renda</span>
+            <Button size="sm" onClick={handleAddRenda}>
+              <DollarSign className="h-4 w-4 mr-2" />
+              Adicionar
+            </Button>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {rendas.map((renda) => (
+            <div key={renda.id} className="grid grid-cols-3 gap-2 items-center">
+              <Input
+                value={renda.nome}
+                onChange={(e) => handleUpdateRenda(renda.id, 'nome', e.target.value)}
+                placeholder="Nome da renda"
+              />
+              <Input
+                type="number"
+                value={renda.valor}
+                onChange={(e) => handleUpdateRenda(renda.id, 'valor', parseFloat(e.target.value) || 0)}
+                placeholder="Valor"
+              />
+              <select
+                value={renda.restricao || ''}
+                onChange={(e) => handleUpdateRenda(renda.id, 'restricao', e.target.value || undefined)}
+                className="px-3 py-2 border border-input rounded-md text-sm"
+              >
+                <option value="">Sem restrição</option>
+                <option value="alimentacao">Vale Alimentação</option>
+                <option value="transporte">Vale Transporte</option>
+              </select>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
 
-        {/* Planejamento Granular */}
+      {/* Orçamento Detalhado - Largura Total */}
+      <div className="space-y-6">
+        {/* Orçamento Pago */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center justify-between">
-              <span>Orçamento Detalhado</span>
-              <Button size="sm" onClick={handleAddBudgetLine}>
+              <span>Orçamento Pago</span>
+              <Button size="sm" onClick={() => handleAddBudgetLine('pago')}>
                 <Plus className="h-4 w-4 mr-2" />
                 Adicionar Linha
               </Button>
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {currentBudgetItems.length === 0 ? (
+            {budgetItemsPagos.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 <Target className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p>Nenhum item de orçamento definido para este mês.</p>
-                <p className="text-sm">Adicione linhas de orçamento para planejar seus gastos.</p>
+                <p>Nenhum item de orçamento pago definido para este mês.</p>
+                <p className="text-sm">Adicione linhas de orçamento para itens já pagos.</p>
               </div>
             ) : (
-              currentBudgetItems.map((item) => {
-                const category = categories.find(c => c.id === item.categoryId);
-                const subcategory = category?.subcategories.find(s => s.id === item.subcategoryId);
-                
-                // Calcular gasto realizado (excluindo transferências)
-                const realizado = transactions
-                  .filter(t => 
-                    t.type === 'despesa' && 
-                    t.month === selectedMonth && 
-                    t.year === selectedYear &&
-                    t.category === category?.name &&
-                    (subcategory ? t.subcategory === subcategory.name : true) &&
-                    t.category !== 'Transferências' &&
-                    t.subcategory !== 'Transferência entre Contas'
-                  )
-                  .reduce((sum, t) => sum + t.amount, 0);
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {budgetItemsPagos.map((item) => {
+                  const category = categories.find(c => c.id === item.categoryId);
+                  const subcategory = category?.subcategories.find(s => s.id === item.subcategoryId);
+                  
+                  const realizado = transactions
+                    .filter(t => 
+                      t.type === 'despesa' && 
+                      t.month === selectedMonth && 
+                      t.year === selectedYear &&
+                      t.category === category?.name &&
+                      (subcategory ? t.subcategory === subcategory.name : true) &&
+                      t.category !== 'Transferências' &&
+                      t.subcategory !== 'Transferência entre Contas'
+                    )
+                    .reduce((sum, t) => sum + t.amount, 0);
 
-                const percentualGasto = item.amount > 0 ? (realizado / item.amount) * 100 : 0;
-                
-                return (
-                  <div key={item.id} className="space-y-3 p-4 border rounded-lg">
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                      <Select 
-                        value={item.categoryId} 
-                        onValueChange={(value) => handleUpdateBudgetLine(item.id, 'categoryId', value)}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Categoria" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {categories.filter(c => c.type === 'despesa').map(category => (
-                            <SelectItem key={category.id} value={category.id}>
-                              {category.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                  const percentualGasto = item.amount > 0 ? (realizado / item.amount) * 100 : 0;
+                  
+                  return (
+                    <div key={item.id} className="space-y-3 p-4 border rounded-lg bg-success/5">
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                        <Select 
+                          value={item.categoryId} 
+                          onValueChange={(value) => handleUpdateBudgetLine(item.id, 'categoryId', value)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Categoria" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {categories.filter(c => c.type === 'despesa').map(category => (
+                              <SelectItem key={category.id} value={category.id}>
+                                {category.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
 
-                      <Select 
-                        value={item.subcategoryId || 'none'} 
-                        onValueChange={(value) => handleUpdateBudgetLine(item.id, 'subcategoryId', value === 'none' ? undefined : value)}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Subcategoria" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">Nenhuma</SelectItem>
-                          {category?.subcategories.map(subcategory => (
-                            <SelectItem key={subcategory.id} value={subcategory.id}>
-                              {subcategory.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                        <Select 
+                          value={item.subcategoryId || 'none'} 
+                          onValueChange={(value) => handleUpdateBudgetLine(item.id, 'subcategoryId', value === 'none' ? undefined : value)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Subcategoria" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">Nenhuma</SelectItem>
+                            {category?.subcategories.map(subcategory => (
+                              <SelectItem key={subcategory.id} value={subcategory.id}>
+                                {subcategory.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
 
-                      <Input
-                        type="number"
-                        placeholder="Valor orçado"
-                        value={item.amount}
-                        onChange={(e) => handleUpdateBudgetLine(item.id, 'amount', parseFloat(e.target.value) || 0)}
-                      />
+                        <Input
+                          type="number"
+                          placeholder="Valor orçado"
+                          value={item.amount}
+                          onChange={(e) => handleUpdateBudgetLine(item.id, 'amount', parseFloat(e.target.value) || 0)}
+                        />
 
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleDeleteBudgetLine(item.id)}
-                        className="text-destructive hover:text-destructive"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-
-                    {item.amount > 0 && (
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="text-muted-foreground">
-                            {subcategory ? `${category?.name} - ${subcategory.name}` : category?.name}
-                          </span>
-                          <span className="text-muted-foreground">
-                            {formatCurrency(realizado)} / {formatCurrency(item.amount)}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <div className="flex-1">
-                            <Progress 
-                              value={Math.min(percentualGasto, 100)} 
-                              className={`h-2 ${percentualGasto > 100 ? 'bg-danger/20' : ''}`}
-                            />
-                          </div>
-                          <span className={`text-xs font-medium ${
-                            percentualGasto > 100 ? 'text-danger' : 
-                            percentualGasto > 80 ? 'text-warning' : 'text-success'
-                          }`}>
-                            {percentualGasto.toFixed(0)}%
-                          </span>
-                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDeleteBudgetLine(item.id)}
+                          className="text-destructive hover:text-destructive"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
                       </div>
-                    )}
-                  </div>
-                );
-              })
+
+                      {item.amount > 0 && (
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">
+                              {subcategory ? `${category?.name} - ${subcategory.name}` : category?.name}
+                            </span>
+                            <span className="text-muted-foreground">
+                              {formatCurrency(realizado)} / {formatCurrency(item.amount)}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <div className="flex-1">
+                              <Progress 
+                                value={Math.min(percentualGasto, 100)} 
+                                className={`h-2 ${percentualGasto > 100 ? 'bg-danger/20' : ''}`}
+                              />
+                            </div>
+                            <span className={`text-xs font-medium ${
+                              percentualGasto > 100 ? 'text-danger' : 
+                              percentualGasto > 80 ? 'text-warning' : 'text-success'
+                            }`}>
+                              {percentualGasto.toFixed(0)}%
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Orçamento Pendente */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center justify-between">
+              <span>Orçamento Pendente</span>
+              <Button size="sm" onClick={() => handleAddBudgetLine('pendente')}>
+                <Plus className="h-4 w-4 mr-2" />
+                Adicionar Linha
+              </Button>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {budgetItemsPendentes.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <Target className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p>Nenhum item de orçamento pendente definido para este mês.</p>
+                <p className="text-sm">Adicione linhas de orçamento para itens pendentes.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {budgetItemsPendentes.map((item) => {
+                  const category = categories.find(c => c.id === item.categoryId);
+                  const subcategory = category?.subcategories.find(s => s.id === item.subcategoryId);
+                  
+                  const realizado = transactions
+                    .filter(t => 
+                      t.type === 'despesa' && 
+                      t.month === selectedMonth && 
+                      t.year === selectedYear &&
+                      t.category === category?.name &&
+                      (subcategory ? t.subcategory === subcategory.name : true) &&
+                      t.category !== 'Transferências' &&
+                      t.subcategory !== 'Transferência entre Contas'
+                    )
+                    .reduce((sum, t) => sum + t.amount, 0);
+
+                  const percentualGasto = item.amount > 0 ? (realizado / item.amount) * 100 : 0;
+                  
+                  return (
+                    <div key={item.id} className="space-y-3 p-4 border rounded-lg bg-warning/5">
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                        <Select 
+                          value={item.categoryId} 
+                          onValueChange={(value) => handleUpdateBudgetLine(item.id, 'categoryId', value)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Categoria" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {categories.filter(c => c.type === 'despesa').map(category => (
+                              <SelectItem key={category.id} value={category.id}>
+                                {category.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+
+                        <Select 
+                          value={item.subcategoryId || 'none'} 
+                          onValueChange={(value) => handleUpdateBudgetLine(item.id, 'subcategoryId', value === 'none' ? undefined : value)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Subcategoria" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">Nenhuma</SelectItem>
+                            {category?.subcategories.map(subcategory => (
+                              <SelectItem key={subcategory.id} value={subcategory.id}>
+                                {subcategory.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+
+                        <Input
+                          type="number"
+                          placeholder="Valor orçado"
+                          value={item.amount}
+                          onChange={(e) => handleUpdateBudgetLine(item.id, 'amount', parseFloat(e.target.value) || 0)}
+                        />
+
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDeleteBudgetLine(item.id)}
+                          className="text-destructive hover:text-destructive"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+
+                      {item.amount > 0 && (
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">
+                              {subcategory ? `${category?.name} - ${subcategory.name}` : category?.name}
+                            </span>
+                            <span className="text-muted-foreground">
+                              {formatCurrency(realizado)} / {formatCurrency(item.amount)}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <div className="flex-1">
+                              <Progress 
+                                value={Math.min(percentualGasto, 100)} 
+                                className={`h-2 ${percentualGasto > 100 ? 'bg-danger/20' : ''}`}
+                              />
+                            </div>
+                            <span className={`text-xs font-medium ${
+                              percentualGasto > 100 ? 'text-danger' : 
+                              percentualGasto > 80 ? 'text-warning' : 'text-success'
+                            }`}>
+                              {percentualGasto.toFixed(0)}%
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             )}
           </CardContent>
         </Card>
