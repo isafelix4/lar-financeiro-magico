@@ -85,8 +85,14 @@ const VisaoGeral = () => {
     .filter(t => t.type === 'receita')
     .reduce((sum, t) => sum + t.amount, 0);
 
-  const investimentos = filteredTransactions
+  const investimentos = transactions
     .filter(t => t.type === 'despesa' && t.category === 'Transferências' && t.subcategory === 'Investimentos')
+    .filter(transaction => {
+      const monthMatch = selectedMonth.length === 0 || selectedMonth.includes(transaction.month);
+      const yearMatch = selectedYear.length === 0 || selectedYear.includes(transaction.year);
+      const accountMatch = selectedAccount.length === 0 || selectedAccount.includes(transaction.account);
+      return monthMatch && yearMatch && accountMatch;
+    })
     .reduce((sum, t) => sum + t.amount, 0);
 
   const despesas = filteredTransactions
@@ -342,7 +348,26 @@ const VisaoGeral = () => {
                       </TableCell>
                       <TableCell>{transaction.category}</TableCell>
                       <TableCell>{transaction.subcategory || '-'}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground max-w-32 truncate">
+                      <TableCell 
+                        className="text-sm text-muted-foreground max-w-32 truncate cursor-pointer hover:bg-muted/50"
+                        contentEditable
+                        suppressContentEditableWarning
+                        onBlur={(e) => {
+                          const newObservations = e.currentTarget.textContent?.trim() || undefined;
+                          if (newObservations !== transaction.observations) {
+                            updateTransaction(transaction.id, {
+                              ...transaction,
+                              observations: newObservations
+                            });
+                          }
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            e.currentTarget.blur();
+                          }
+                        }}
+                      >
                         {transaction.observations || '-'}
                       </TableCell>
                       <TableCell>

@@ -15,7 +15,31 @@ import { useFinancialData } from "@/hooks/useFinancialData";
 const Dividas = () => {
   const [dividas, setDividas] = useState<Debt[]>(() => {
     const stored = localStorage.getItem('financial-dividas');
-    return stored ? JSON.parse(stored) : [];
+    const dividasData = stored ? JSON.parse(stored) : [];
+    
+    // Apply interest calculation only once per month
+    const today = new Date();
+    const currentMonthKey = `${today.getFullYear()}-${today.getMonth()}`;
+    const lastInterestCalculation = localStorage.getItem('last-interest-calculation');
+    
+    if (lastInterestCalculation !== currentMonthKey && dividasData.length > 0) {
+      const updatedDividas = dividasData.map((divida: Debt) => {
+        if (divida.parcelasRestantes > 0 && divida.saldoDevedor > 0) {
+          const juros = divida.saldoDevedor * (divida.taxaJuros / 100);
+          return {
+            ...divida,
+            saldoDevedor: divida.saldoDevedor + juros
+          };
+        }
+        return divida;
+      });
+      
+      localStorage.setItem('financial-dividas', JSON.stringify(updatedDividas));
+      localStorage.setItem('last-interest-calculation', currentMonthKey);
+      return updatedDividas;
+    }
+    
+    return dividasData;
   });
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingDivida, setEditingDivida] = useState<Debt | null>(null);

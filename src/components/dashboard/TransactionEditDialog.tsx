@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { useFinancialData } from "@/hooks/useFinancialData";
 import { useToast } from "@/hooks/use-toast";
 import type { Transaction } from "@/types/financial";
@@ -28,7 +29,8 @@ export const TransactionEditDialog = ({
     amount: "",
     category: "",
     subcategory: "",
-    type: "despesa" as 'receita' | 'despesa'
+    type: "despesa" as 'receita' | 'despesa',
+    observations: ""
   });
   
   const [showDebtDialog, setShowDebtDialog] = useState(false);
@@ -40,7 +42,8 @@ export const TransactionEditDialog = ({
         amount: transaction.amount.toString(),
         category: transaction.category,
         subcategory: transaction.subcategory || "",
-        type: transaction.type
+        type: transaction.type,
+        observations: transaction.observations || ""
       });
     }
   }, [transaction]);
@@ -60,7 +63,8 @@ export const TransactionEditDialog = ({
       amount: parseFloat(formData.amount),
       category: formData.category,
       subcategory: formData.subcategory || undefined,
-      type: formData.type
+      type: formData.type,
+      observations: formData.observations || undefined
     };
 
     // Check if category changed to "Dívidas" and wasn't before
@@ -92,7 +96,8 @@ export const TransactionEditDialog = ({
       amount: parseFloat(formData.amount),
       category: formData.category,
       subcategory: formData.subcategory || undefined,
-      type: formData.type
+      type: formData.type,
+      observations: formData.observations || undefined
     };
 
     onUpdate(updatedTransaction);
@@ -206,6 +211,16 @@ export const TransactionEditDialog = ({
                 </SelectContent>
               </Select>
             </div>
+          </div>
+          
+          <div className="space-y-2">
+            <Label htmlFor="observations">Observações</Label>
+            <Textarea 
+              id="observations"
+              placeholder="Observações opcionais"
+              value={formData.observations}
+              onChange={(e) => setFormData(prev => ({ ...prev, observations: e.target.value }))}
+            />
           </div>
           
           <div className="flex justify-end gap-2">

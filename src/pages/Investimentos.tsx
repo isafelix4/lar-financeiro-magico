@@ -118,13 +118,13 @@ const Investimentos = () => {
       const month = targetDate.getMonth() + 1;
       const year = targetDate.getFullYear();
       
-      // Calculate total invested accumulated up to this month
+      // Calculate total invested accumulated at the start of this month
       const totalAportadoAcumulado = investments.reduce((sum, inv) => {
         const investmentDate = new Date(inv.dataPrimeiroAporte);
         const monthStart = new Date(year, month - 1, 1);
         
-        // Only include investment value if it started before or during this month
-        if (investmentDate <= monthStart) {
+        // Only include investment value if it started before this month
+        if (investmentDate < monthStart) {
           return sum + inv.valorAportado;
         }
         return sum;
@@ -482,10 +482,10 @@ const Investimentos = () => {
                   fill="hsl(var(--primary))"
                   name="Total Aportado Acumulado"
                 />
-                <Bar 
+                 <Bar 
                   dataKey="variacaoLiquidaMes" 
                   stackId="a" 
-                  fill="hsl(var(--secondary))"
+                  fill="hsl(var(--accent))"
                   name="Variação Líquida no Mês"
                 />
               </BarChart>
