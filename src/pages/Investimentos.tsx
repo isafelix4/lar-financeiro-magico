@@ -153,7 +153,8 @@ const Investimentos = () => {
         .reduce((sum, t) => sum + t.amount, 0);
 
       // Net variation for the month (contributions + manual returns - withdrawals)
-      // For simplicity, we'll use 0 for manual returns since we don't have historical data
+      // Include manual returns from the updateInvestmentReturn function
+      // For now, we'll track only transactions since manual returns are handled separately
       const variacaoLiquidaMes = aportesMes - resgatesMes;
 
       const monthNames = ['jan.', 'fev.', 'mar.', 'abr.', 'mai.', 'jun.', 'jul.', 'ago.', 'set.', 'out.', 'nov.', 'dez.'];
@@ -479,13 +480,13 @@ const Investimentos = () => {
                 <Bar 
                   dataKey="totalAportadoAcumulado" 
                   stackId="a" 
-                  fill="hsl(var(--primary))"
+                  fill="hsl(var(--muted))"
                   name="Total Aportado Acumulado"
                 />
                  <Bar 
                   dataKey="variacaoLiquidaMes" 
                   stackId="a" 
-                  fill="hsl(var(--accent))"
+                  fill="hsl(var(--primary))"
                   name="Variação Líquida no Mês"
                 />
               </BarChart>

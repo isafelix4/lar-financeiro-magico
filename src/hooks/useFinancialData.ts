@@ -330,60 +330,32 @@ export const useFinancialData = () => {
     }));
   };
 
-  // Função para aplicar capitalização de juros e atualizar status
-  const aplicarCapitalizacaoEAtualizarStatus = () => {
-    const currentDate = new Date();
-    const currentMonth = currentDate.getMonth() + 1;
-    const currentYear = currentDate.getFullYear();
-    
+  // Simple function to update debt status only (removed capitalization)
+  const updateDebtStatus = (debtId: string) => {
     setDebts(prev => prev.map(debt => {
-      const debtStartDate = new Date(debt.dataInicio);
+      if (debt.id !== debtId) return debt;
+      
+      const currentDate = new Date();
+      const currentMonth = currentDate.getMonth() + 1;
+      const currentYear = currentDate.getFullYear();
+      
       const hasPaymentThisMonth = transactions.some(t => 
         t.category === 'Dívidas' && 
         t.month === currentMonth && 
-        t.year === currentYear &&
-        // Here we would need a way to link transactions to debts
-        // For now, we'll check if there are any debt payments this month
-        true
+        t.year === currentYear
       );
       
-      // Update status based on payment history
       let newStatus = debt.status;
       if (hasPaymentThisMonth) {
         newStatus = 'Em dia';
-      } else if (debt.status !== 'Suspensa') {
-        // Check if no payments in last 2 months (simplified logic)
-        const twoMonthsAgo = new Date();
-        twoMonthsAgo.setMonth(twoMonthsAgo.getMonth() - 2);
-        
-        if (debt.ultimoPagamento) {
-          const lastPaymentDate = new Date(debt.ultimoPagamento);
-          if (lastPaymentDate < twoMonthsAgo) {
-            newStatus = 'Em atraso';
-          }
-        } else if (debtStartDate < twoMonthsAgo) {
-          newStatus = 'Em atraso';
-        }
-      }
-      
-      // Apply interest capitalization if no payment and debt is active
-      let newSaldoDevedor = debt.saldoDevedor;
-      if (!hasPaymentThisMonth && currentDate > debtStartDate && debt.parcelasRestantes > 0) {
-        newSaldoDevedor = debt.saldoDevedor * (1 + (debt.taxaJuros / 100));
       }
       
       return {
         ...debt,
-        saldoDevedor: newSaldoDevedor,
         status: newStatus
       };
     }));
   };
-
-  // Run monthly debt updates
-  useEffect(() => {
-    aplicarCapitalizacaoEAtualizarStatus();
-  }, [transactions]); // Run when transactions change
 
   const addInvestment = (investment: Omit<Investment, 'id'>) => {
     const newInvestment: Investment = {
@@ -438,7 +410,6 @@ export const useFinancialData = () => {
     updateBudgetItem,
     deleteBudgetItem,
     processarPagamentoDivida,
-    aplicarCapitalizacaoEAtualizarStatus,
     addInvestment,
     updateInvestment,
     deleteInvestment,
