@@ -27,7 +27,7 @@ const INVESTMENT_TYPES = [
 ];
 
 const Investimentos = () => {
-  const { investments, addInvestment, updateInvestment, deleteInvestment, updateInvestmentReturn, transactions } = useFinancialData();
+  const { investments, addInvestment, updateInvestment, deleteInvestment, updateInvestmentReturn, transactions, investmentReturns } = useFinancialData();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingInvestment, setEditingInvestment] = useState<Investment | null>(null);
   const [sortConfig, setSortConfig] = useState<{ key: keyof Investment; direction: 'asc' | 'desc' } | null>(null);
@@ -96,81 +96,77 @@ const Investimentos = () => {
   // Generate distinctive colors for chart
   const COLORS = generateDistinctiveColors(chartDataByType.length);
 
-  // Monthly evolution data for last 12 months
-  const monthlyEvolution = [];
-  const currentDate = new Date();
-  
-  // Find earliest investment date
-  const earliestDate = investments.reduce((earliest, investment) => {
-    const investmentDate = new Date(investment.dataPrimeiroAporte);
-    return earliest && earliest < investmentDate ? earliest : investmentDate;
-  }, null as Date | null);
-  
-  if (earliestDate) {
-    const startDate = new Date(Math.max(
-      earliestDate.getTime(),
-      new Date(currentDate.getFullYear() - 1, currentDate.getMonth()).getTime()
-    ));
-    
-    let targetDate = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
-    
-    while (targetDate <= currentDate) {
-      const month = targetDate.getMonth() + 1;
-      const year = targetDate.getFullYear();
-      
-      // Calculate total invested accumulated at the start of this month
-      const totalAportadoAcumulado = investments.reduce((sum, inv) => {
-        const investmentDate = new Date(inv.dataPrimeiroAporte);
-        const monthStart = new Date(year, month - 1, 1);
-        
-        // Only include investment value if it started before this month
-        if (investmentDate < monthStart) {
-          return sum + inv.valorAportado;
-        }
-        return sum;
-      }, 0);
-      
-      // Contributions for this month
-      const aportesMes = transactions
-        .filter(t => 
-          t.category === 'Transferências' && 
-          t.subcategory === 'Investimentos' &&
-          t.month === month && 
-          t.year === year &&
-          t.type === 'despesa'
-        )
-        .reduce((sum, t) => sum + t.amount, 0);
+// Monthly evolution data for last 12 months (snapshots)
+const monthlyEvolution = [] as Array<{
+  mes: string;
+  totalAportadoAcumulado: number;
+  variacaoLiquidaMes: number;
+  aportesMes: number;
+  resgatesMes: number;
+  retornosManuaisMes: number;
+}>;
+const now = new Date();
+for (let i = 11; i >= 0; i--) {
+  const target = new Date(now.getFullYear(), now.getMonth() - i, 1);
+  const month = target.getMonth() + 1;
+  const year = target.getFullYear();
+  const nextMonthStart = new Date(year, month, 1);
 
-      // Withdrawals for this month
-      const resgatesMes = transactions
-        .filter(t => 
-          t.category === 'Variável' && 
-          t.subcategory === 'Investimentos' &&
-          t.month === month && 
-          t.year === year &&
-          t.type === 'receita'
-        )
-        .reduce((sum, t) => sum + t.amount, 0);
+  // Base: total aportado acumulado até o início do mês (aportes iniciais + adicionais anteriores)
+  const initialAportesBefore = investments.reduce((sum, inv) => {
+    const invDate = new Date(inv.dataPrimeiroAporte);
+    return invDate < target ? sum + inv.valorAportado : sum;
+  }, 0);
+  const additionalAportesBefore = transactions
+    .filter(t => 
+      t.category === 'Transferências' &&
+      t.subcategory === 'Investimentos' &&
+      t.type === 'despesa' &&
+      (t.year < year || (t.year === year && t.month < month))
+    )
+    .reduce((s, t) => s + t.amount, 0);
+  const totalAportadoAcumulado = initialAportesBefore + additionalAportesBefore;
 
-      // Net variation for the month (contributions + manual returns - withdrawals)
-      // Include manual returns from the updateInvestmentReturn function
-      // For now, we'll track only transactions since manual returns are handled separately
-      const variacaoLiquidaMes = aportesMes - resgatesMes;
+  // Topo: variação líquida do mês = aportes + retornos manuais - resgates
+  const aportesMes = transactions
+    .filter(t => 
+      t.category === 'Transferências' &&
+      t.subcategory === 'Investimentos' &&
+      t.type === 'despesa' &&
+      t.month === month && t.year === year
+    )
+    .reduce((s, t) => s + t.amount, 0);
 
-      const monthNames = ['jan.', 'fev.', 'mar.', 'abr.', 'mai.', 'jun.', 'jul.', 'ago.', 'set.', 'out.', 'nov.', 'dez.'];
-      const formattedDate = `${monthNames[month - 1]} de ${year}`;
+  const resgatesMes = transactions
+    .filter(t => 
+      t.category === 'Variável' &&
+      t.subcategory === 'Investimentos' &&
+      t.type === 'receita' &&
+      t.month === month && t.year === year
+    )
+    .reduce((s, t) => s + t.amount, 0);
 
-      monthlyEvolution.push({
-        mes: formattedDate,
-        totalAportadoAcumulado: Math.max(0, totalAportadoAcumulado),
-        variacaoLiquidaMes: Math.max(0, variacaoLiquidaMes),
-        aportesMes,
-        resgatesMes
-      });
-      
-      targetDate.setMonth(targetDate.getMonth() + 1);
-    }
-  }
+  const retornosManuaisMes = investmentReturns
+    .filter(ev => {
+      const d = new Date(ev.date);
+      return d >= target && d < nextMonthStart;
+    })
+    .reduce((s, ev) => s + ev.amount, 0);
+
+  const variacaoLiquidaMes = aportesMes + retornosManuaisMes - resgatesMes;
+
+  const monthNames = ['jan.', 'fev.', 'mar.', 'abr.', 'mai.', 'jun.', 'jul.', 'ago.', 'set.', 'out.', 'nov.', 'dez.'];
+  const formattedDate = `${monthNames[month - 1]} de ${year}`;
+
+  monthlyEvolution.push({
+    mes: formattedDate,
+    totalAportadoAcumulado: Math.max(0, totalAportadoAcumulado),
+    variacaoLiquidaMes,
+    aportesMes,
+    resgatesMes,
+    retornosManuaisMes
+  });
+}
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {

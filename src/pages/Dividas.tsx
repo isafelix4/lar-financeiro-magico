@@ -13,7 +13,7 @@ import type { Debt } from "@/types/financial";
 import { useFinancialData } from "@/hooks/useFinancialData";
 
 const Dividas = () => {
-  const { debts: dividas, processarPagamentoDivida } = useFinancialData();
+  const { debts: dividas, processarPagamentoDivida, addDebt, updateDebt, deleteDebt } = useFinancialData();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingDivida, setEditingDivida] = useState<Debt | null>(null);
   const [sortField, setSortField] = useState<keyof Debt | null>(null);
@@ -27,68 +27,64 @@ const Dividas = () => {
     }).format(value);
   };
 
-  const handleAddDivida = (formData: FormData) => {
-    const novaDivida: Debt = {
-      id: Date.now().toString(),
-      credor: formData.get('credor') as string,
-      descricao: formData.get('descricao') as string,
-      valorInicial: parseFloat(formData.get('valorInicial') as string),
-      valorAtual: parseFloat(formData.get('valorAtual') as string),
-      taxaJuros: parseFloat(formData.get('taxaJuros') as string),
-      valorParcela: parseFloat(formData.get('valorParcela') as string),
-      parcelasRestantes: parseInt(formData.get('parcelasRestantes') as string),
-      saldoDevedor: parseFloat(formData.get('saldoDevedor') as string),
-      dataInicio: formData.get('dataInicio') as string,
-      status: 'Em dia',
-    };
+const handleAddDivida = (formData: FormData) => {
+  const novaDivida = {
+    credor: formData.get('credor') as string,
+    descricao: formData.get('descricao') as string,
+    valorInicial: parseFloat(formData.get('valorInicial') as string),
+    valorAtual: parseFloat(formData.get('valorAtual') as string),
+    taxaJuros: parseFloat(formData.get('taxaJuros') as string),
+    valorParcela: parseFloat(formData.get('valorParcela') as string),
+    parcelasRestantes: parseInt(formData.get('parcelasRestantes') as string),
+    saldoDevedor: parseFloat(formData.get('saldoDevedor') as string),
+    dataInicio: formData.get('dataInicio') as string,
+    status: 'Em dia',
+  } as Omit<Debt, 'id'>;
 
-    // This would need to be handled by the hook - for now just showing the structure
-    // addDebt(novaDivida);
-    setIsDialogOpen(false);
-    
-    toast({
-      title: "Dívida adicionada!",
-      description: `Dívida com ${novaDivida.credor} foi adicionada com sucesso.`,
-    });
+  addDebt(novaDivida);
+  setIsDialogOpen(false);
+  
+  toast({
+    title: "Dívida adicionada!",
+    description: `Dívida com ${novaDivida.credor} foi adicionada com sucesso.`,
+  });
+};
+
+const handleEditDivida = (formData: FormData) => {
+  if (!editingDivida) return;
+
+  const dividaAtualizada: Debt = {
+    ...editingDivida,
+    credor: formData.get('credor') as string,
+    descricao: formData.get('descricao') as string,
+    valorInicial: parseFloat(formData.get('valorInicial') as string),
+    valorAtual: parseFloat(formData.get('valorAtual') as string),
+    taxaJuros: parseFloat(formData.get('taxaJuros') as string),
+    valorParcela: parseFloat(formData.get('valorParcela') as string),
+    parcelasRestantes: parseInt(formData.get('parcelasRestantes') as string),
+    saldoDevedor: parseFloat(formData.get('saldoDevedor') as string),
+    dataInicio: formData.get('dataInicio') as string,
+    status: formData.get('status') as 'Em dia' | 'Em atraso' | 'Suspensa',
   };
 
-  const handleEditDivida = (formData: FormData) => {
-    if (!editingDivida) return;
+  updateDebt(editingDivida.id, dividaAtualizada);
+  setEditingDivida(null);
+  
+  toast({
+    title: "Dívida atualizada!",
+    description: `Dívida com ${dividaAtualizada.credor} foi atualizada com sucesso.`,
+  });
+};
 
-    const dividaAtualizada: Debt = {
-      ...editingDivida,
-      credor: formData.get('credor') as string,
-      descricao: formData.get('descricao') as string,
-      valorInicial: parseFloat(formData.get('valorInicial') as string),
-      valorAtual: parseFloat(formData.get('valorAtual') as string),
-      taxaJuros: parseFloat(formData.get('taxaJuros') as string),
-      valorParcela: parseFloat(formData.get('valorParcela') as string),
-      parcelasRestantes: parseInt(formData.get('parcelasRestantes') as string),
-      saldoDevedor: parseFloat(formData.get('saldoDevedor') as string),
-      dataInicio: formData.get('dataInicio') as string,
-      status: formData.get('status') as 'Em dia' | 'Em atraso' | 'Suspensa',
-    };
-
-    // This would need to be handled by the hook - for now just showing the structure
-    // updateDebt(editingDivida.id, dividaAtualizada);
-    setEditingDivida(null);
-    
-    toast({
-      title: "Dívida atualizada!",
-      description: `Dívida com ${dividaAtualizada.credor} foi atualizada com sucesso.`,
-    });
-  };
-
-  const handleDeleteDivida = (dividaId: string) => {
-    const divida = dividas.find(d => d.id === dividaId);
-    // This would need to be handled by the hook - for now just showing the structure
-    // deleteDebt(dividaId);
-    
-    toast({
-      title: "Dívida removida!",
-      description: `Dívida com ${divida?.credor} foi removida com sucesso.`,
-    });
-  };
+const handleDeleteDivida = (dividaId: string) => {
+  const divida = dividas.find(d => d.id === dividaId);
+  deleteDebt(dividaId);
+  
+  toast({
+    title: "Dívida removida!",
+    description: `Dívida com ${divida?.credor} foi removida com sucesso.`,
+  });
+};
 
 
   const handleSort = (field: keyof Debt) => {

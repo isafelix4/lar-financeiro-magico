@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import type { Category, Subcategory, Account, Transaction, BudgetItem, Debt, Investment } from '@/types/financial';
+import type { Category, Subcategory, Account, Transaction, BudgetItem, Debt, Investment, InvestmentReturnEvent } from '@/types/financial';
 
 const DEFAULT_CATEGORIES: Category[] = [
   {
@@ -163,10 +163,15 @@ export const useFinancialData = () => {
     return stored ? JSON.parse(stored) : [];
   });
 
-  const [investments, setInvestments] = useState<Investment[]>(() => {
-    const stored = localStorage.getItem('financial-investments');
-    return stored ? JSON.parse(stored) : [];
-  });
+const [investments, setInvestments] = useState<Investment[]>(() => {
+  const stored = localStorage.getItem('financial-investments');
+  return stored ? JSON.parse(stored) : [];
+});
+
+const [investmentReturns, setInvestmentReturns] = useState<InvestmentReturnEvent[]>(() => {
+  const stored = localStorage.getItem('financial-investment-returns');
+  return stored ? JSON.parse(stored) : [];
+});
 
   useEffect(() => {
     localStorage.setItem('financial-categories', JSON.stringify(categories));
@@ -188,9 +193,13 @@ export const useFinancialData = () => {
     localStorage.setItem('financial-dividas', JSON.stringify(debts));
   }, [debts]);
 
-  useEffect(() => {
-    localStorage.setItem('financial-investments', JSON.stringify(investments));
-  }, [investments]);
+useEffect(() => {
+  localStorage.setItem('financial-investments', JSON.stringify(investments));
+}, [investments]);
+
+useEffect(() => {
+  localStorage.setItem('financial-investment-returns', JSON.stringify(investmentReturns));
+}, [investmentReturns]);
 
   const addCategory = (category: Omit<Category, 'id'>) => {
     const newCategory: Category = {
@@ -307,28 +316,56 @@ export const useFinancialData = () => {
     setBudgetItems(prev => prev.filter(item => item.id !== itemId));
   };
 
-  // Função para processar pagamento de dívida com automação completa
-  const processarPagamentoDivida = (dividaId: string, valorPagamento: number) => {
-    const currentDate = new Date();
-    
-    setDebts(prev => prev.map(debt => {
-      if (debt.id === dividaId && debt.parcelasRestantes > 0) {
-        return {
-          ...debt,
-          saldoDevedor: Math.max(0, debt.saldoDevedor - valorPagamento),
-          parcelasRestantes: Math.max(0, debt.parcelasRestantes - 1),
-          status: 'Em dia',
-          ultimoPagamento: currentDate.toISOString()
-        };
-      }
-      return debt;
-    }));
-    
-    // Notificar outras partes da aplicação
-    window.dispatchEvent(new CustomEvent('debt-payment', { 
-      detail: { dividaId, valorPagamento, data: currentDate.toISOString() }
-    }));
+// Funções CRUD para Dívidas
+const addDebt = (debt: Omit<Debt, 'id' | 'status' | 'ultimoPagamento'> & { status?: Debt['status']; ultimoPagamento?: string }) => {
+  const newDebt: Debt = {
+    id: `debt-${Date.now()}`,
+    status: debt.status ?? 'Em dia',
+    ultimoPagamento: debt.ultimoPagamento,
+    credor: debt.credor,
+    descricao: debt.descricao,
+    valorInicial: debt.valorInicial,
+    valorAtual: debt.valorAtual,
+    taxaJuros: debt.taxaJuros,
+    valorParcela: debt.valorParcela,
+    parcelasRestantes: debt.parcelasRestantes,
+    saldoDevedor: debt.saldoDevedor,
+    dataInicio: debt.dataInicio
   };
+  setDebts(prev => [...prev, newDebt]);
+  return newDebt;
+};
+
+const updateDebt = (debtId: string, updates: Partial<Debt>) => {
+  setDebts(prev => prev.map(d => d.id === debtId ? { ...d, ...updates } : d));
+};
+
+const deleteDebt = (debtId: string) => {
+  setDebts(prev => prev.filter(d => d.id !== debtId));
+};
+
+// Função para processar pagamento de dívida com automação completa
+const processarPagamentoDivida = (dividaId: string, valorPagamento: number) => {
+  const currentDate = new Date();
+  
+  setDebts(prev => prev.map(debt => {
+    if (debt.id === dividaId && debt.parcelasRestantes > 0) {
+      return {
+        ...debt,
+        saldoDevedor: Math.max(0, debt.saldoDevedor - valorPagamento),
+        parcelasRestantes: Math.max(0, debt.parcelasRestantes - 1),
+        status: 'Em dia',
+        ultimoPagamento: currentDate.toISOString()
+      };
+    }
+    return debt;
+  }));
+  
+  // Notificar outras partes da aplicação
+  window.dispatchEvent(new CustomEvent('debt-payment', { 
+    detail: { dividaId, valorPagamento, data: currentDate.toISOString() }
+  }));
+};
 
   // Simple function to update debt status only (removed capitalization)
   const updateDebtStatus = (debtId: string) => {
@@ -376,43 +413,59 @@ export const useFinancialData = () => {
     setInvestments(prev => prev.filter(investment => investment.id !== investmentId));
   };
 
-  const updateInvestmentReturn = (investmentId: string, ganhoMonetario: number, rentabilidadePercentual: number) => {
-    setInvestments(prev => prev.map(investment => {
-      if (investment.id !== investmentId) return investment;
-      
-      return {
-        ...investment,
-        valorAtualizado: investment.valorAtualizado + ganhoMonetario,
-        rentabilidadeMensal: rentabilidadePercentual
-      };
-    }));
-  };
+const updateInvestmentReturn = (investmentId: string, ganhoMonetario: number, rentabilidadePercentual: number) => {
+  const currentDate = new Date();
+  setInvestments(prev => prev.map(investment => {
+    if (investment.id !== investmentId) return investment;
+    return {
+      ...investment,
+      valorAtualizado: investment.valorAtualizado + ganhoMonetario,
+      rentabilidadeMensal: rentabilidadePercentual
+    };
+  }));
+  // Registrar evento de rentabilidade manual para o gráfico mensal
+  setInvestmentReturns(prev => [
+    ...prev,
+    {
+      id: `invret-${Date.now()}`,
+      investmentId,
+      amount: ganhoMonetario,
+      date: currentDate.toISOString()
+    }
+  ]);
+};
 
-  return {
-    categories,
-    accounts,
-    transactions,
-    budgetItems,
-    debts,
-    investments,
-    addCategory,
-    updateCategory,
-    deleteCategory,
-    addSubcategory,
-    deleteSubcategory,
-    addAccount,
-    updateAccount,
-    deleteAccount,
-    addTransactions,
-    updateTransaction,
-    deleteTransaction,
-    addBudgetItem,
-    updateBudgetItem,
-    deleteBudgetItem,
-    processarPagamentoDivida,
-    addInvestment,
-    updateInvestment,
-    deleteInvestment,
-    updateInvestmentReturn
-  };
+return {
+  categories,
+  accounts,
+  transactions,
+  budgetItems,
+  debts,
+  investments,
+  addCategory,
+  updateCategory,
+  deleteCategory,
+  addSubcategory,
+  deleteSubcategory,
+  addAccount,
+  updateAccount,
+  deleteAccount,
+  addTransactions,
+  updateTransaction,
+  deleteTransaction,
+  addBudgetItem,
+  updateBudgetItem,
+  deleteBudgetItem,
+  // Dívidas
+  addDebt,
+  updateDebt,
+  deleteDebt,
+  processarPagamentoDivida,
+  // Investimentos
+  addInvestment,
+  updateInvestment,
+  deleteInvestment,
+  updateInvestmentReturn,
+  investmentReturns
+};
 };

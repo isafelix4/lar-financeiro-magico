@@ -77,3 +77,10 @@ export interface Investment {
   corretora: string;
   dataPrimeiroAporte: string;
 }
+
+export interface InvestmentReturnEvent {
+  id: string;
+  investmentId: string;
+  amount: number; // ganho/perda monetário registrado manualmente
+  date: string;   // ISO string da data do registro
+}
